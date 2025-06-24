@@ -51,7 +51,7 @@ public class CubeRenderer
         // Render top face (Up) - aligned with front
         for (int row = 0; row < 3; row++)
         {
-            sb.Append("    "); // 4 spaces to align with front face (3 left squares + 1 space)
+            sb.Append($"{(char)0x3164}{(char)0x3164}{(char)0x3164}"); // 3 Hangul Filler (U+3164) to center over front face
             for (int col = 0; col < 3; col++)
             {
                 var position = row * 3 + col;
@@ -69,7 +69,6 @@ public class CubeRenderer
                 var position = row * 3 + col;
                 sb.Append(symbols[left[position]]);
             }
-            sb.Append(' ');
 
             // Front face  
             for (int col = 0; col < 3; col++)
@@ -77,7 +76,6 @@ public class CubeRenderer
                 var position = row * 3 + col;
                 sb.Append(symbols[front[position]]);
             }
-            sb.Append(' ');
 
             // Right face
             for (int col = 0; col < 3; col++)
@@ -85,7 +83,6 @@ public class CubeRenderer
                 var position = row * 3 + col;
                 sb.Append(symbols[right[position]]);
             }
-            sb.Append(' ');
 
             // Back face
             for (int col = 0; col < 3; col++)
@@ -99,7 +96,7 @@ public class CubeRenderer
         // Render bottom face (Down) - aligned with front
         for (int row = 0; row < 3; row++)
         {
-            sb.Append("    "); // 4 spaces to align with front face (3 left squares + 1 space)
+            sb.Append($"{(char)0x3164}{(char)0x3164}{(char)0x3164}"); // 3 Hangul Filler (U+3164) to center over front face
             for (int col = 0; col < 3; col++)
             {
                 var position = row * 3 + col;
@@ -324,7 +321,7 @@ public class CubeRenderer
     
     /// <summary>
     /// Gets the color that a piece shows on a specific axis
-    /// Uses current cube orientation to determine which colors appear on each axis
+    /// STRICT MODE: Uses direct color indexing based on X→Y→Z ordering
     /// </summary>
     private CubeColor GetPieceColorForAxis(CubePiece piece, char axis, CubeOrientation orientation)
     {
@@ -334,22 +331,22 @@ public class CubeRenderer
         {
             'X' => position.X switch
             {
-                -1 => orientation.Left,   // Left face color
-                1 => orientation.Right,   // Right face color  
+                -1 => GetStrictColorForAxis(piece, 'X'), // Left face - use piece's X-axis color
+                1 => GetStrictColorForAxis(piece, 'X'),  // Right face - use piece's X-axis color  
                 0 => GetMiddleEdgeColorForX(piece, orientation), // Middle edge piece
                 _ => throw new InvalidOperationException($"Invalid X coordinate: {position.X}")
             },
             'Y' => position.Y switch
             {
-                -1 => orientation.Bottom, // Bottom face color
-                1 => orientation.Up,      // Top face color
+                -1 => GetStrictColorForAxis(piece, 'Y'), // Bottom face - use piece's Y-axis color
+                1 => GetStrictColorForAxis(piece, 'Y'),  // Top face - use piece's Y-axis color
                 0 => GetMiddleEdgeColorForY(piece, orientation), // Middle edge piece
                 _ => throw new InvalidOperationException($"Invalid Y coordinate: {position.Y}")
             },
             'Z' => position.Z switch
             {
-                -1 => orientation.Back,   // Back face color
-                1 => orientation.Front,   // Front face color
+                -1 => GetStrictColorForAxis(piece, 'Z'), // Back face - use piece's Z-axis color
+                1 => GetStrictColorForAxis(piece, 'Z'),  // Front face - use piece's Z-axis color
                 0 => GetMiddleEdgeColorForZ(piece, orientation), // Middle edge piece  
                 _ => throw new InvalidOperationException($"Invalid Z coordinate: {position.Z}")
             },
@@ -358,36 +355,79 @@ public class CubeRenderer
     }
     
     /// <summary>
+    /// Gets the color for a specific axis using strict X→Y→Z ordering
+    /// This will expose orientation bugs if colors are stored incorrectly
+    /// </summary>
+    private CubeColor GetStrictColorForAxis(CubePiece piece, char axis)
+    {
+        var pos = piece.Position;
+        var colorIndex = 0;
+        
+        // Calculate color index based on X→Y→Z ordering
+        switch (char.ToUpper(axis))
+        {
+            case 'X':
+                if (pos.X == 0) throw new InvalidOperationException($"Piece at {pos} has no X-axis color");
+                return piece.Colors[0]; // X-axis color is always first
+                
+            case 'Y':
+                if (pos.Y == 0) throw new InvalidOperationException($"Piece at {pos} has no Y-axis color");
+                if (pos.X != 0) colorIndex++; // Skip X-axis color if present
+                return piece.Colors[colorIndex];
+                
+            case 'Z':
+                if (pos.Z == 0) throw new InvalidOperationException($"Piece at {pos} has no Z-axis color");
+                if (pos.X != 0) colorIndex++; // Skip X-axis color if present
+                if (pos.Y != 0) colorIndex++; // Skip Y-axis color if present
+                return piece.Colors[colorIndex];
+                
+            default:
+                throw new ArgumentException($"Invalid axis: {axis}");
+        }
+    }
+    
+    /// <summary>
     /// For middle edge pieces on X-axis, determine which color shows on X faces
+    /// STRICT MODE: Assumes colors are stored in X→Y→Z order
     /// </summary>
     private CubeColor GetMiddleEdgeColorForX(CubePiece piece, CubeOrientation orientation)
     {
-        // Middle edges have 2 colors, need to pick the one that belongs on X-axis (Left/Right)
-        var xAxisColors = new[] { orientation.Left, orientation.Right };
-        var xAxisColor = piece.Colors.FirstOrDefault(c => xAxisColors.Contains(c));
-        return xAxisColor != default(CubeColor) ? xAxisColor : piece.Colors.First();
+        // Middle edges have 2 colors: X-axis color should be first (index 0)
+        // This will expose orientation bugs if colors are in wrong order
+        return piece.Colors.Count > 0 ? piece.Colors[0] : orientation.Left;
     }
     
     /// <summary>
     /// For middle edge pieces on Y-axis, determine which color shows on Y faces
+    /// STRICT MODE: Assumes colors are stored in X→Y→Z order
     /// </summary>
     private CubeColor GetMiddleEdgeColorForY(CubePiece piece, CubeOrientation orientation)
     {
-        // Middle edges have 2 colors, need to pick the one that belongs on Y-axis (Up/Down)
-        var yAxisColors = new[] { orientation.Up, orientation.Bottom };
-        var yAxisColor = piece.Colors.FirstOrDefault(c => yAxisColors.Contains(c));
-        return yAxisColor != default(CubeColor) ? yAxisColor : piece.Colors.First();
+        // For Y-axis edges, determine which color index corresponds to Y-axis
+        // If piece is at (0, Y, Z): Y-axis color is first (only Y and Z present)
+        // If piece is at (X, Y, 0): Y-axis color is second (X first, then Y)
+        var pos = piece.Position;
+        if (pos.X == 0) // YZ edge: Y-axis color is first
+            return piece.Colors.Count > 0 ? piece.Colors[0] : orientation.Up;
+        else // XY edge: Y-axis color is second
+            return piece.Colors.Count > 1 ? piece.Colors[1] : orientation.Up;
     }
     
     /// <summary>
     /// For middle edge pieces on Z-axis, determine which color shows on Z faces
+    /// STRICT MODE: Assumes colors are stored in X→Y→Z order
     /// </summary>
     private CubeColor GetMiddleEdgeColorForZ(CubePiece piece, CubeOrientation orientation)
     {
-        // Middle edges have 2 colors, need to pick the one that belongs on Z-axis (Front/Back)
-        var zAxisColors = new[] { orientation.Front, orientation.Back };
-        var zAxisColor = piece.Colors.FirstOrDefault(c => zAxisColors.Contains(c));
-        return zAxisColor != default(CubeColor) ? zAxisColor : piece.Colors.First();
+        // For Z-axis edges, determine which color index corresponds to Z-axis
+        // If piece is at (0, 0, Z): impossible (would be center)
+        // If piece is at (X, 0, Z): Z-axis color is second (X first, then Z)
+        // If piece is at (0, Y, Z): Z-axis color is second (Y first, then Z)
+        var pos = piece.Position;
+        if (pos.X == 0) // YZ edge: Z-axis color is second
+            return piece.Colors.Count > 1 ? piece.Colors[1] : orientation.Front;
+        else // XZ edge: Z-axis color is second
+            return piece.Colors.Count > 1 ? piece.Colors[1] : orientation.Front;
     }
 
     /// <summary>

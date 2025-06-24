@@ -38,6 +38,22 @@ public enum MoveDirection
 }
 
 /// <summary>
+/// Represents the direction of a face rotation (for internal use)
+/// </summary>
+public enum RotationDirection
+{
+    /// <summary>
+    /// Clockwise rotation when looking at the face
+    /// </summary>
+    Clockwise,
+    
+    /// <summary>
+    /// Counter-clockwise rotation when looking at the face
+    /// </summary>
+    CounterClockwise
+}
+
+/// <summary>
 /// Represents a single move in an algorithm (either reorientation or rotation)
 /// </summary>
 public class Move : IEquatable<Move>
