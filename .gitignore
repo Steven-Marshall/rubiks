@@ -1,0 +1,70 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+[Pp]ublish/
+[Bb]uild/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.cache
+*.docstates
+
+# Rider files
+.idea/
+
+# VS Code files
+.vscode/
+
+# macOS files
+.DS_Store
+
+# Windows files
+Thumbs.db
+
+# NuGet packages
+*.nupkg
+packages/
+
+# Test results
+TestResults/
+*.trx
+
+# Temporary files
+*.tmp
+*.temp
+[Tt]emp/
+
+# Logs
+*.log
+
+# Cube save files (can be regenerated)
+*.cube
+
+# Backup files
+*.bak
+*~
+
+# Python files (from fix_tests.py)
+__pycache__/
+*.pyc
+
+# Archive directory (v1 code)
+archive/
+
+# Temporary test files
+temp_cube.json
+test_cube.json
+clean-test.cube
+freshcube.cube
+testcube.cube
+
+# Debug files
+debug_*.cs
+test_*.cs
+generate_test_expectations.cs
