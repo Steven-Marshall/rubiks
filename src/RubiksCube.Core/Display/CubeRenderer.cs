@@ -308,25 +308,25 @@ public class CubeRenderer
         if (faceVector.X != 0)
         {
             // This is an X-axis face (Left/Right)
-            return GetPieceColorForAxis(piece, 'X');
+            return GetPieceColorForAxis(piece, 'X', orientation);
         }
         else if (faceVector.Y != 0)
         {
             // This is a Y-axis face (Up/Down)  
-            return GetPieceColorForAxis(piece, 'Y');
+            return GetPieceColorForAxis(piece, 'Y', orientation);
         }
         else // faceVector.Z != 0
         {
             // This is a Z-axis face (Front/Back)
-            return GetPieceColorForAxis(piece, 'Z');
+            return GetPieceColorForAxis(piece, 'Z', orientation);
         }
     }
     
     /// <summary>
     /// Gets the color that a piece shows on a specific axis
-    /// For solved cube: pieces show the color that corresponds to their position on that axis
+    /// Uses current cube orientation to determine which colors appear on each axis
     /// </summary>
-    private CubeColor GetPieceColorForAxis(CubePiece piece, char axis)
+    private CubeColor GetPieceColorForAxis(CubePiece piece, char axis, CubeOrientation orientation)
     {
         var position = piece.Position;
         
@@ -334,23 +334,23 @@ public class CubeRenderer
         {
             'X' => position.X switch
             {
-                -1 => CubeColor.Red,     // Left
-                1 => CubeColor.Orange,   // Right  
-                0 => GetMiddleEdgeColorForX(piece), // Middle edge piece
+                -1 => orientation.Left,   // Left face color
+                1 => orientation.Right,   // Right face color  
+                0 => GetMiddleEdgeColorForX(piece, orientation), // Middle edge piece
                 _ => throw new InvalidOperationException($"Invalid X coordinate: {position.X}")
             },
             'Y' => position.Y switch
             {
-                -1 => CubeColor.White,   // Bottom
-                1 => CubeColor.Yellow,   // Top
-                0 => GetMiddleEdgeColorForY(piece), // Middle edge piece
+                -1 => orientation.Bottom, // Bottom face color
+                1 => orientation.Up,      // Top face color
+                0 => GetMiddleEdgeColorForY(piece, orientation), // Middle edge piece
                 _ => throw new InvalidOperationException($"Invalid Y coordinate: {position.Y}")
             },
             'Z' => position.Z switch
             {
-                -1 => CubeColor.Blue,    // Back
-                1 => CubeColor.Green,    // Front
-                0 => GetMiddleEdgeColorForZ(piece), // Middle edge piece  
+                -1 => orientation.Back,   // Back face color
+                1 => orientation.Front,   // Front face color
+                0 => GetMiddleEdgeColorForZ(piece, orientation), // Middle edge piece  
                 _ => throw new InvalidOperationException($"Invalid Z coordinate: {position.Z}")
             },
             _ => throw new ArgumentException($"Invalid axis: {axis}")
@@ -360,30 +360,33 @@ public class CubeRenderer
     /// <summary>
     /// For middle edge pieces on X-axis, determine which color shows on X faces
     /// </summary>
-    private CubeColor GetMiddleEdgeColorForX(CubePiece piece)
+    private CubeColor GetMiddleEdgeColorForX(CubePiece piece, CubeOrientation orientation)
     {
-        // Middle edges have 2 colors, need to pick the one that belongs on X-axis
-        var xAxisColor = piece.Colors.FirstOrDefault(c => c == CubeColor.Red || c == CubeColor.Orange);
+        // Middle edges have 2 colors, need to pick the one that belongs on X-axis (Left/Right)
+        var xAxisColors = new[] { orientation.Left, orientation.Right };
+        var xAxisColor = piece.Colors.FirstOrDefault(c => xAxisColors.Contains(c));
         return xAxisColor != default(CubeColor) ? xAxisColor : piece.Colors.First();
     }
     
     /// <summary>
     /// For middle edge pieces on Y-axis, determine which color shows on Y faces
     /// </summary>
-    private CubeColor GetMiddleEdgeColorForY(CubePiece piece)
+    private CubeColor GetMiddleEdgeColorForY(CubePiece piece, CubeOrientation orientation)
     {
-        // Middle edges have 2 colors, need to pick the one that belongs on Y-axis
-        var yAxisColor = piece.Colors.FirstOrDefault(c => c == CubeColor.White || c == CubeColor.Yellow);
+        // Middle edges have 2 colors, need to pick the one that belongs on Y-axis (Up/Down)
+        var yAxisColors = new[] { orientation.Up, orientation.Bottom };
+        var yAxisColor = piece.Colors.FirstOrDefault(c => yAxisColors.Contains(c));
         return yAxisColor != default(CubeColor) ? yAxisColor : piece.Colors.First();
     }
     
     /// <summary>
     /// For middle edge pieces on Z-axis, determine which color shows on Z faces
     /// </summary>
-    private CubeColor GetMiddleEdgeColorForZ(CubePiece piece)
+    private CubeColor GetMiddleEdgeColorForZ(CubePiece piece, CubeOrientation orientation)
     {
-        // Middle edges have 2 colors, need to pick the one that belongs on Z-axis
-        var zAxisColor = piece.Colors.FirstOrDefault(c => c == CubeColor.Green || c == CubeColor.Blue);
+        // Middle edges have 2 colors, need to pick the one that belongs on Z-axis (Front/Back)
+        var zAxisColors = new[] { orientation.Front, orientation.Back };
+        var zAxisColor = piece.Colors.FirstOrDefault(c => zAxisColors.Contains(c));
         return zAxisColor != default(CubeColor) ? zAxisColor : piece.Colors.First();
     }
 
