@@ -129,10 +129,8 @@ class Program
                 }
                 else if (move.Type == MoveType.Rotation)
                 {
-                    // TODO: Implement face rotations in Phase 4d
-                    await Console.Error.WriteLineAsync($"Face rotations not yet implemented: {move}");
-                    await Console.Error.WriteLineAsync("Currently only reorientations (x, y, z) are supported");
-                    return 1;
+                    // Face rotations are now fully implemented
+                    cube.ApplyMove(move);
                 }
             }
 
@@ -223,25 +221,17 @@ class Program
                 cube = Cube.FromJson(cubeJson.Trim());
             }
 
-            // Display cube
-            var displayFormat = format.ToLowerInvariant() switch
+            // Use PythonRenderer with format support
+            var pythonRenderer = new PythonRenderer(cube);
+            
+            string output = format.ToLowerInvariant() switch
             {
-                "ascii" => DisplayFormat.ASCII,
-                "unicode" => DisplayFormat.Unicode,
-                _ => DisplayFormat.Unicode
+                "ascii" => pythonRenderer.RenderAscii(),
+                "unicode" => pythonRenderer.RenderUnicode(),
+                _ => throw new ArgumentException($"Unsupported format: {format}. Use 'ascii' or 'unicode'.")
             };
-
-            var config = new DisplayConfig { Format = displayFormat };
-            var renderer = new CubeRenderer(config);
-            var displayResult = renderer.Render(cube);
-
-            if (displayResult.IsFailure)
-            {
-                await Console.Error.WriteLineAsync($"Error displaying cube: {displayResult.Error}");
-                return 1;
-            }
-
-            Console.WriteLine(displayResult.Value);
+            
+            Console.WriteLine(output);
             return 0;
         }
         catch (Exception ex)
