@@ -16,12 +16,7 @@ public class Cube
     private readonly Dictionary<Position3D, CubePiece> _pieces;
     
     /// <summary>
-    /// Current viewing orientation of the cube (front and up faces)
-    /// </summary>
-    public CubeOrientation Orientation { get; private set; }
-    
-    /// <summary>
-    /// All pieces on the cube (8 corners + 12 edges)
+    /// All pieces on the cube (8 corners + 12 edges + 6 centers)
     /// </summary>
     public IReadOnlyCollection<CubePiece> Pieces => _pieces.Values;
     
@@ -34,6 +29,11 @@ public class Cube
     /// Edge pieces only  
     /// </summary>
     public IEnumerable<CubePiece> Edges => _pieces.Values.Where(p => p.Type == PieceType.Edge);
+    
+    /// <summary>
+    /// Center pieces only
+    /// </summary>
+    public IEnumerable<CubePiece> Centers => _pieces.Values.Where(p => p.Type == PieceType.Center);
     
     /// <summary>
     /// Creates a new cube in solved state with standard orientation
@@ -49,61 +49,69 @@ public class Cube
     private Cube()
     {
         _pieces = new Dictionary<Position3D, CubePiece>();
-        Orientation = CubeOrientation.Standard;
-        
         InitializeSolvedPieces();
     }
     
     /// <summary>
     /// Copy constructor for creating cube copies
     /// </summary>
-    private Cube(Dictionary<Position3D, CubePiece> pieces, CubeOrientation orientation)
+    private Cube(Dictionary<Position3D, CubePiece> pieces)
     {
         _pieces = new Dictionary<Position3D, CubePiece>(pieces);
-        Orientation = orientation;
     }
     
     /// <summary>
-    /// Initializes all 20 pieces in their solved positions with correct colors
+    /// Initializes all 26 pieces in their solved positions with correct colors
     /// </summary>
     private void InitializeSolvedPieces()
     {
-        // 8 Corner pieces (3 colors each)
+        // 8 Corner pieces (3 colors each) - Python-style [X, Y, Z] arrays
         var corners = new[]
         {
             // Top corners (Y = 1)
-            (new Position3D(-1, 1, 1), new[] { CubeColor.Red, CubeColor.Yellow, CubeColor.Green }),    // Top-Left-Front
-            (new Position3D(1, 1, 1), new[] { CubeColor.Orange, CubeColor.Yellow, CubeColor.Green }),  // Top-Right-Front  
-            (new Position3D(-1, 1, -1), new[] { CubeColor.Red, CubeColor.Yellow, CubeColor.Blue }),    // Top-Left-Back
-            (new Position3D(1, 1, -1), new[] { CubeColor.Orange, CubeColor.Yellow, CubeColor.Blue }),  // Top-Right-Back
+            (new Position3D(-1, 1, 1), new CubeColor?[] { CubeColor.Red, CubeColor.Yellow, CubeColor.Green }),    // Top-Left-Front
+            (new Position3D(1, 1, 1), new CubeColor?[] { CubeColor.Orange, CubeColor.Yellow, CubeColor.Green }),  // Top-Right-Front  
+            (new Position3D(-1, 1, -1), new CubeColor?[] { CubeColor.Red, CubeColor.Yellow, CubeColor.Blue }),    // Top-Left-Back
+            (new Position3D(1, 1, -1), new CubeColor?[] { CubeColor.Orange, CubeColor.Yellow, CubeColor.Blue }),  // Top-Right-Back
             
             // Bottom corners (Y = -1)
-            (new Position3D(-1, -1, 1), new[] { CubeColor.Red, CubeColor.White, CubeColor.Green }),    // Bottom-Left-Front
-            (new Position3D(1, -1, 1), new[] { CubeColor.Orange, CubeColor.White, CubeColor.Green }),  // Bottom-Right-Front
-            (new Position3D(-1, -1, -1), new[] { CubeColor.Red, CubeColor.White, CubeColor.Blue }),    // Bottom-Left-Back  
-            (new Position3D(1, -1, -1), new[] { CubeColor.Orange, CubeColor.White, CubeColor.Blue })   // Bottom-Right-Back
+            (new Position3D(-1, -1, 1), new CubeColor?[] { CubeColor.Red, CubeColor.White, CubeColor.Green }),    // Bottom-Left-Front
+            (new Position3D(1, -1, 1), new CubeColor?[] { CubeColor.Orange, CubeColor.White, CubeColor.Green }),  // Bottom-Right-Front
+            (new Position3D(-1, -1, -1), new CubeColor?[] { CubeColor.Red, CubeColor.White, CubeColor.Blue }),    // Bottom-Left-Back  
+            (new Position3D(1, -1, -1), new CubeColor?[] { CubeColor.Orange, CubeColor.White, CubeColor.Blue })   // Bottom-Right-Back
         };
         
-        // 12 Edge pieces (2 colors each)
+        // 12 Edge pieces - Python-style [X, Y, Z] arrays with nulls for missing axes
         var edges = new[]
         {
             // Top edges (Y = 1)
-            (new Position3D(0, 1, 1), new[] { CubeColor.Yellow, CubeColor.Green }),    // Top-Front
-            (new Position3D(0, 1, -1), new[] { CubeColor.Yellow, CubeColor.Blue }),    // Top-Back
-            (new Position3D(-1, 1, 0), new[] { CubeColor.Red, CubeColor.Yellow }),     // Top-Left
-            (new Position3D(1, 1, 0), new[] { CubeColor.Orange, CubeColor.Yellow }),   // Top-Right
+            (new Position3D(0, 1, 1), new CubeColor?[] { null, CubeColor.Yellow, CubeColor.Green }),    // Top-Front
+            (new Position3D(0, 1, -1), new CubeColor?[] { null, CubeColor.Yellow, CubeColor.Blue }),    // Top-Back
+            (new Position3D(-1, 1, 0), new CubeColor?[] { CubeColor.Red, CubeColor.Yellow, null }),     // Top-Left
+            (new Position3D(1, 1, 0), new CubeColor?[] { CubeColor.Orange, CubeColor.Yellow, null }),   // Top-Right
             
             // Middle edges (Y = 0)
-            (new Position3D(-1, 0, 1), new[] { CubeColor.Red, CubeColor.Green }),      // Middle-Left-Front
-            (new Position3D(1, 0, 1), new[] { CubeColor.Orange, CubeColor.Green }),    // Middle-Right-Front
-            (new Position3D(-1, 0, -1), new[] { CubeColor.Red, CubeColor.Blue }),      // Middle-Left-Back
-            (new Position3D(1, 0, -1), new[] { CubeColor.Orange, CubeColor.Blue }),    // Middle-Right-Back
+            (new Position3D(-1, 0, 1), new CubeColor?[] { CubeColor.Red, null, CubeColor.Green }),      // Middle-Left-Front
+            (new Position3D(1, 0, 1), new CubeColor?[] { CubeColor.Orange, null, CubeColor.Green }),    // Middle-Right-Front
+            (new Position3D(-1, 0, -1), new CubeColor?[] { CubeColor.Red, null, CubeColor.Blue }),      // Middle-Left-Back
+            (new Position3D(1, 0, -1), new CubeColor?[] { CubeColor.Orange, null, CubeColor.Blue }),    // Middle-Right-Back
             
             // Bottom edges (Y = -1)
-            (new Position3D(0, -1, 1), new[] { CubeColor.White, CubeColor.Green }),    // Bottom-Front
-            (new Position3D(0, -1, -1), new[] { CubeColor.White, CubeColor.Blue }),    // Bottom-Back
-            (new Position3D(-1, -1, 0), new[] { CubeColor.Red, CubeColor.White }),     // Bottom-Left
-            (new Position3D(1, -1, 0), new[] { CubeColor.Orange, CubeColor.White })    // Bottom-Right
+            (new Position3D(0, -1, 1), new CubeColor?[] { null, CubeColor.White, CubeColor.Green }),    // Bottom-Front
+            (new Position3D(0, -1, -1), new CubeColor?[] { null, CubeColor.White, CubeColor.Blue }),    // Bottom-Back
+            (new Position3D(-1, -1, 0), new CubeColor?[] { CubeColor.Red, CubeColor.White, null }),     // Bottom-Left
+            (new Position3D(1, -1, 0), new CubeColor?[] { CubeColor.Orange, CubeColor.White, null })    // Bottom-Right
+        };
+        
+        // Center pieces (6 total) - Python style with single color and 2 nulls
+        var centers = new[]
+        {
+            (new Position3D(1, 0, 0), new CubeColor?[] { CubeColor.Orange, null, null }),    // Right center
+            (new Position3D(-1, 0, 0), new CubeColor?[] { CubeColor.Red, null, null }),      // Left center
+            (new Position3D(0, 1, 0), new CubeColor?[] { null, CubeColor.Yellow, null }),    // Up center
+            (new Position3D(0, -1, 0), new CubeColor?[] { null, CubeColor.White, null }),    // Down center
+            (new Position3D(0, 0, 1), new CubeColor?[] { null, null, CubeColor.Green }),     // Front center
+            (new Position3D(0, 0, -1), new CubeColor?[] { null, null, CubeColor.Blue })      // Back center
         };
         
         // Add all pieces to the cube
@@ -113,6 +121,11 @@ public class Cube
         }
         
         foreach (var (position, colors) in edges)
+        {
+            _pieces[position] = new CubePiece(position, colors);
+        }
+        
+        foreach (var (position, colors) in centers)
         {
             _pieces[position] = new CubePiece(position, colors);
         }
@@ -129,7 +142,7 @@ public class Cube
     /// <summary>
     /// Checks if the cube is in a solved state
     /// </summary>
-    public bool IsSolved => _pieces.Values.All(p => p.IsSolved) && Orientation == CubeOrientation.Standard;
+    public bool IsSolved => _pieces.Values.All(p => p.IsSolved);
     
     /// <summary>
     /// Creates a deep copy of this cube
@@ -141,27 +154,108 @@ public class Cube
             kvp => new CubePiece(kvp.Value.SolvedPosition, kvp.Value.Colors).MoveTo(kvp.Value.Position)
         );
         
-        return new Cube(clonedPieces, new CubeOrientation(Orientation.Front, Orientation.Up));
+        return new Cube(clonedPieces);
     }
     
     /// <summary>
-    /// Applies a cube rotation (x, y, z) changing the viewing orientation
+    /// X rotation - rotates entire cube around X-axis (like rotating along Right-Left axis)
+    /// Uses Python ROT_YZ_CW matrix to rotate all pieces
     /// </summary>
-    public void ApplyRotation(char axis, bool clockwise = true)
+    public void X()
     {
-        switch (char.ToLower(axis))
+        var matrix = new int[,] {
+            { 1, 0, 0 },
+            { 0, 0, 1 },
+            { 0, -1, 0 }
+        };
+        RotateAllPieces(matrix);
+    }
+    
+    /// <summary>
+    /// X' rotation - counter-clockwise X rotation
+    /// </summary>
+    public void Xi()
+    {
+        var matrix = new int[,] {
+            { 1, 0, 0 },
+            { 0, 0, -1 },
+            { 0, 1, 0 }
+        };
+        RotateAllPieces(matrix);
+    }
+    
+    /// <summary>
+    /// Y rotation - rotates entire cube around Y-axis (like rotating along Up-Down axis)
+    /// Uses Python ROT_XZ_CW matrix to rotate all pieces
+    /// </summary>
+    public void Y()
+    {
+        var matrix = new int[,] {
+            { 0, 0, -1 },
+            { 0, 1, 0 },
+            { 1, 0, 0 }
+        };
+        RotateAllPieces(matrix);
+    }
+    
+    /// <summary>
+    /// Y' rotation - counter-clockwise Y rotation
+    /// </summary>
+    public void Yi()
+    {
+        var matrix = new int[,] {
+            { 0, 0, 1 },
+            { 0, 1, 0 },
+            { -1, 0, 0 }
+        };
+        RotateAllPieces(matrix);
+    }
+    
+    /// <summary>
+    /// Z rotation - rotates entire cube around Z-axis (like rotating along Front-Back axis)
+    /// Uses Python ROT_XY_CW matrix to rotate all pieces
+    /// </summary>
+    public void Z()
+    {
+        var matrix = new int[,] {
+            { 0, 1, 0 },
+            { -1, 0, 0 },
+            { 0, 0, 1 }
+        };
+        RotateAllPieces(matrix);
+    }
+    
+    /// <summary>
+    /// Z' rotation - counter-clockwise Z rotation
+    /// </summary>
+    public void Zi()
+    {
+        var matrix = new int[,] {
+            { 0, -1, 0 },
+            { 1, 0, 0 },
+            { 0, 0, 1 }
+        };
+        RotateAllPieces(matrix);
+    }
+    
+    /// <summary>
+    /// Rotates all pieces in the cube using the given rotation matrix (Python-style)
+    /// </summary>
+    private void RotateAllPieces(int[,] matrix)
+    {
+        var newPositions = new Dictionary<Position3D, CubePiece>();
+        
+        foreach (var piece in _pieces.Values)
         {
-            case 'x':
-                Orientation = Orientation.ApplyXRotation(clockwise);
-                break;
-            case 'y':
-                Orientation = Orientation.ApplyYRotation(clockwise);
-                break;
-            case 'z':
-                Orientation = Orientation.ApplyZRotation(clockwise);
-                break;
-            default:
-                throw new ArgumentException($"Invalid rotation axis: {axis}. Must be x, y, or z.");
+            var rotatedPiece = RotatePiecePython(piece, matrix);
+            newPositions[rotatedPiece.Position] = rotatedPiece;
+        }
+        
+        // Update cube with new positions
+        _pieces.Clear();
+        foreach (var (position, piece) in newPositions)
+        {
+            _pieces[position] = piece;
         }
     }
     
@@ -193,323 +287,229 @@ public class Cube
         if (move.Type != MoveType.Reorientation)
             throw new ArgumentException($"Move {move} is not a reorientation. Use ApplyMove for rotations.");
             
-        var clockwise = move.Direction switch
+        // Execute the appropriate reorientation method based on face and direction
+        switch (move.Face)
         {
-            MoveDirection.Clockwise => true,
-            MoveDirection.CounterClockwise => false,
-            MoveDirection.Double => true, // Apply twice below
-            _ => throw new InvalidOperationException($"Unknown direction: {move.Direction}")
-        };
-        
-        // Apply the rotation
-        ApplyRotation(move.Face, clockwise);
+            case 'x': // x rotation
+                if (move.Direction == MoveDirection.CounterClockwise)
+                    Xi();
+                else
+                    X();
+                break;
+                
+            case 'y': // y rotation
+                if (move.Direction == MoveDirection.CounterClockwise)
+                    Yi();
+                else
+                    Y();
+                break;
+                
+            case 'z': // z rotation
+                if (move.Direction == MoveDirection.CounterClockwise)
+                    Zi();
+                else
+                    Z();
+                break;
+                
+            default:
+                throw new ArgumentException($"Invalid reorientation face: {move.Face}");
+        }
         
         // For double moves, apply again
         if (move.Direction == MoveDirection.Double)
         {
-            ApplyRotation(move.Face, clockwise);
+            switch (move.Face)
+            {
+                case 'x':
+                    X();
+                    break;
+                case 'y':
+                    Y();
+                    break;
+                case 'z':
+                    Z();
+                    break;
+            }
         }
     }
+    
+    // ===== PYTHON-STYLE V3.0 ROTATION METHODS =====
+    // These implement the unified solver-centric approach from pglass/cube
+    
+    /// <summary>
+    /// Python-style piece rotation - applies matrix to piece position and swaps colors on changed axes
+    /// </summary>
+    private static CubePiece RotatePiecePython(CubePiece piece, int[,] matrix)
+    {
+        var oldPos = piece.Position;
+        var newPos = RotationMatrix.Apply(matrix, oldPos);
+        
+        // Check if newPos is valid before creating Position3D
+        if (Math.Abs(newPos.X) > 1 || Math.Abs(newPos.Y) > 1 || Math.Abs(newPos.Z) > 1)
+        {
+            throw new InvalidOperationException($"Matrix rotation produced invalid position: {newPos} from {oldPos}");
+        }
+        
+        // Clone the piece colors for modification
+        var newColors = (CubeColor?[])piece.Colors.Clone();
+        
+        var deltaX = newPos.X - oldPos.X;
+        var deltaY = newPos.Y - oldPos.Y; 
+        var deltaZ = newPos.Z - oldPos.Z;
+        
+        // Python: if not any(rot): return  # no change occurred
+        if (deltaX == 0 && deltaY == 0 && deltaZ == 0)
+        {
+            return new CubePiece(piece.SolvedPosition, newColors) { Position = newPos };
+        }
+        
+        // Python: if rot.count(0) == 2: rot += matrix * rot
+        var zeroCount = (deltaX == 0 ? 1 : 0) + (deltaY == 0 ? 1 : 0) + (deltaZ == 0 ? 1 : 0);
+        if (zeroCount == 2)
+        {
+            var (rotX, rotY, rotZ) = RotationMatrix.ApplyRaw(matrix, deltaX, deltaY, deltaZ);
+            deltaX += rotX;
+            deltaY += rotY;
+            deltaZ += rotZ;
+        }
+        
+        // Find which 2 axes changed and swap colors (Python approach)
+        var changedAxes = GetChangedAxes(deltaX, deltaY, deltaZ);
+        
+        // Python: self.colors[i], self.colors[j] = self.colors[j], self.colors[i]
+        if (changedAxes.axis1 < 3 && changedAxes.axis2 < 3)
+        {
+            (newColors[changedAxes.axis1], newColors[changedAxes.axis2]) = 
+                (newColors[changedAxes.axis2], newColors[changedAxes.axis1]);
+        }
+        
+        return new CubePiece(piece.SolvedPosition, newColors) { Position = newPos };
+    }
+    
+    
+    /// <summary>
+    /// Gets the two axes that changed during rotation (for color swapping)
+    /// </summary>
+    private static (int axis1, int axis2) GetChangedAxes(int deltaX, int deltaY, int deltaZ)
+    {
+        var changedAxes = new List<int>();
+        
+        if (deltaX != 0) changedAxes.Add(0); // X-axis
+        if (deltaY != 0) changedAxes.Add(1); // Y-axis
+        if (deltaZ != 0) changedAxes.Add(2); // Z-axis
+        
+        if (changedAxes.Count != 2)
+        {
+            throw new InvalidOperationException($"Expected exactly 2 axes to change during rotation, got {changedAxes.Count}. Position change: ({deltaX}, {deltaY}, {deltaZ})");
+        }
+        
+        return (changedAxes[0], changedAxes[1]);
+    }
+    
+    
+    /// <summary>
+    /// Python-style face rotation - applies rotation to all pieces on a face
+    /// </summary>
+    private void ApplyPythonFaceRotation(Position3D face, int[,] matrix)
+    {
+        var affectedPieces = GetPiecesOnPythonFace(face);
+        var updates = new Dictionary<Position3D, CubePiece>();
+        
+        // First, remove all affected pieces from their current positions
+        foreach (var piece in affectedPieces)
+        {
+            _pieces.Remove(piece.Position);
+        }
+        
+        // Then, rotate and place them in their new positions
+        foreach (var piece in affectedPieces)
+        {
+            var rotatedPiece = RotatePiecePython(piece, matrix);
+            _pieces[rotatedPiece.Position] = rotatedPiece;
+        }
+    }
+    
+    /// <summary>
+    /// Gets pieces that belong to a specific face using Python-style coordinate system
+    /// </summary>
+    private List<CubePiece> GetPiecesOnPythonFace(Position3D face)
+    {
+        return _pieces.Values.Where(piece =>
+        {
+            var pos = piece.Position;
+            // A piece is on a face if it has the same coordinate as the face
+            return (face.X != 0 && pos.X == face.X) ||
+                   (face.Y != 0 && pos.Y == face.Y) ||
+                   (face.Z != 0 && pos.Z == face.Z);
+        }).ToList();
+    }
+    
     
     /// <summary>
     /// Applies a single face rotation using our mathematical approach
     /// </summary>
     private void ApplyFaceRotation(char face, RotationDirection direction)
     {
-        // Determine which axis and coordinate this face represents
-        var (axis, coordinate) = GetFaceAxisAndCoordinate(face);
+        // Use Python-style face rotation
+        var isClockwise = direction == RotationDirection.Clockwise;
         
-        // Find all pieces that belong to this face
-        var affectedPieces = GetPiecesOnFace(axis, coordinate);
+        // Get the appropriate rotation matrix based on face and direction
+        int[,] matrix;
+        Position3D facePosition;
         
-        // Create rotation matrix for 90-degree rotation around the face axis
-        var clockwise = direction == RotationDirection.Clockwise;
-        var rotationMatrix = RotationMatrix.CreateRotationAroundAxis(GetAxisVector(axis), clockwise);
-        
-        // Apply rotation to positions and orientations
-        var newPiecePositions = new Dictionary<Position3D, CubePiece>();
-        
-        foreach (var piece in affectedPieces)
+        switch (char.ToUpper(face))
         {
-            // Rotate the piece's position
-            var newPosition = RotationMatrix.Apply(rotationMatrix, piece.Position);
-            
-            // Rotate the piece's color orientation
-            var rotatedPiece = RotatePieceColors(piece, axis, direction);
-            
-            // Create new piece at rotated position with rotated colors
-            var finalPiece = rotatedPiece.MoveTo(newPosition);
-            newPiecePositions[newPosition] = finalPiece;
-        }
-        
-        // Update the cube with the new piece positions
-        foreach (var (position, piece) in newPiecePositions)
-        {
-            _pieces[position] = piece;
-        }
-    }
-    
-    /// <summary>
-    /// Gets the axis and coordinate for a face notation
-    /// </summary>
-    private static (char axis, int coordinate) GetFaceAxisAndCoordinate(char face)
-    {
-        return char.ToUpper(face) switch
-        {
-            'R' => ('X', 1),   // Right face: X = 1
-            'L' => ('X', -1),  // Left face: X = -1
-            'U' => ('Y', 1),   // Up face: Y = 1
-            'D' => ('Y', -1),  // Down face: Y = -1
-            'F' => ('Z', 1),   // Front face: Z = 1
-            'B' => ('Z', -1),  // Back face: Z = -1
-            _ => throw new ArgumentException($"Invalid face notation: {face}")
-        };
-    }
-    
-    /// <summary>
-    /// Gets all pieces that belong to a specific face
-    /// </summary>
-    private List<CubePiece> GetPiecesOnFace(char axis, int coordinate)
-    {
-        return _pieces.Values.Where(piece =>
-        {
-            var pos = piece.Position;
-            return axis switch
-            {
-                'X' => pos.X == coordinate,
-                'Y' => pos.Y == coordinate,
-                'Z' => pos.Z == coordinate,
-                _ => throw new ArgumentException($"Invalid axis: {axis}")
-            };
-        }).ToList();
-    }
-    
-    /// <summary>
-    /// Gets the axis vector for rotation matrix creation
-    /// </summary>
-    private static Position3D GetAxisVector(char axis)
-    {
-        return axis switch
-        {
-            'X' => new Position3D(1, 0, 0),
-            'Y' => new Position3D(0, 1, 0),
-            'Z' => new Position3D(0, 0, 1),
-            _ => throw new ArgumentException($"Invalid axis: {axis}")
-        };
-    }
-    
-    /// <summary>
-    /// Rotates a piece's colors when the piece itself rotates around an axis
-    /// Based on face rotation axis, determines which color axes need to be swapped
-    /// </summary>
-    private static CubePiece RotatePieceColors(CubePiece piece, char axis, RotationDirection direction)
-    {
-        // For now, let's use a simpler approach based on the rotation axis
-        // When rotating around an axis, the colors on the other two axes swap
-        
-        var colors = piece.Colors.ToList();
-        var pos = piece.Position;
-        
-        // Determine which two axes are perpendicular to the rotation axis
-        // and need their colors swapped
-        switch (char.ToUpper(axis))
-        {
-            case 'X': // Rotating around X-axis: Y and Z colors swap
-                if (piece.Type == PieceType.Corner && pos.Y != 0 && pos.Z != 0)
-                {
-                    // For corner piece: swap Y and Z axis colors
-                    SwapColorsForAxes(colors, pos, 'Y', 'Z', direction);
-                }
-                else if (piece.Type == PieceType.Edge && ((pos.Y != 0 && pos.Z != 0) || pos.X != 0))
-                {
-                    // For edge piece on X-axis rotation: depends on which axes it touches
-                    if (pos.Y != 0 && pos.Z != 0) // YZ edge piece
-                    {
-                        SwapColorsForAxes(colors, pos, 'Y', 'Z', direction);
-                    }
-                    // XY or XZ edge pieces don't rotate colors during X-axis rotation
-                }
+            case 'R': // Right face (X = 1)
+                matrix = isClockwise ? RotationMatrix.ROT_YZ_CW : RotationMatrix.ROT_YZ_CC;
+                facePosition = new Position3D(1, 0, 0);
                 break;
-                
-            case 'Y': // Rotating around Y-axis: X and Z colors swap
-                if (piece.Type == PieceType.Corner && pos.X != 0 && pos.Z != 0)
-                {
-                    SwapColorsForAxes(colors, pos, 'X', 'Z', direction);
-                }
-                else if (piece.Type == PieceType.Edge && ((pos.X != 0 && pos.Z != 0) || pos.Y != 0))
-                {
-                    if (pos.X != 0 && pos.Z != 0) // XZ edge piece
-                    {
-                        SwapColorsForAxes(colors, pos, 'X', 'Z', direction);
-                    }
-                }
+            case 'L': // Left face (X = -1)
+                matrix = isClockwise ? RotationMatrix.ROT_YZ_CC : RotationMatrix.ROT_YZ_CW;
+                facePosition = new Position3D(-1, 0, 0);
                 break;
-                
-            case 'Z': // Rotating around Z-axis: X and Y colors swap
-                if (piece.Type == PieceType.Corner && pos.X != 0 && pos.Y != 0)
-                {
-                    SwapColorsForAxes(colors, pos, 'X', 'Y', direction);
-                }
-                else if (piece.Type == PieceType.Edge && ((pos.X != 0 && pos.Y != 0) || pos.Z != 0))
-                {
-                    if (pos.X != 0 && pos.Y != 0) // XY edge piece
-                    {
-                        SwapColorsForAxes(colors, pos, 'X', 'Y', direction);
-                    }
-                }
+            case 'U': // Up face (Y = 1)
+                matrix = isClockwise ? RotationMatrix.ROT_XZ_CW : RotationMatrix.ROT_XZ_CC;
+                facePosition = new Position3D(0, 1, 0);
                 break;
-        }
-        
-        return new CubePiece(piece.SolvedPosition, colors).MoveTo(piece.Position);
-    }
-    
-    /// <summary>
-    /// Swaps colors between two specific axes for a piece
-    /// </summary>
-    private static void SwapColorsForAxes(List<CubeColor> colors, Position3D pos, char axis1, char axis2, RotationDirection direction)
-    {
-        // Map position to color indices based on our piece color ordering
-        var axis1Index = GetColorIndexForAxis(pos, axis1);
-        var axis2Index = GetColorIndexForAxis(pos, axis2);
-        
-        if (axis1Index >= 0 && axis2Index >= 0 && axis1Index < colors.Count && axis2Index < colors.Count)
-        {
-            // Swap colors (direction doesn't matter for a simple swap)
-            (colors[axis1Index], colors[axis2Index]) = (colors[axis2Index], colors[axis1Index]);
-        }
-    }
-    
-    /// <summary>
-    /// Gets the color index for a specific axis based on piece position
-    /// </summary>
-    private static int GetColorIndexForAxis(Position3D pos, char axis)
-    {
-        // Colors are stored in order: X-axis color (if present), Y-axis color (if present), Z-axis color (if present)
-        int index = 0;
-        
-        switch (char.ToUpper(axis))
-        {
-            case 'X':
-                return pos.X != 0 ? index : -1;
-            case 'Y':
-                if (pos.X != 0) index++;
-                return pos.Y != 0 ? index : -1;
-            case 'Z':
-                if (pos.X != 0) index++;
-                if (pos.Y != 0) index++;
-                return pos.Z != 0 ? index : -1;
+            case 'D': // Down face (Y = -1)
+                matrix = isClockwise ? RotationMatrix.ROT_XZ_CC : RotationMatrix.ROT_XZ_CW;
+                facePosition = new Position3D(0, -1, 0);
+                break;
+            case 'F': // Front face (Z = 1)
+                matrix = isClockwise ? RotationMatrix.ROT_XY_CW : RotationMatrix.ROT_XY_CC;
+                facePosition = new Position3D(0, 0, 1);
+                break;
+            case 'B': // Back face (Z = -1)
+                matrix = isClockwise ? RotationMatrix.ROT_XY_CC : RotationMatrix.ROT_XY_CW;
+                facePosition = new Position3D(0, 0, -1);
+                break;
             default:
-                return -1;
-        }
-    }
-    
-    /// <summary>
-    /// Applies a single 90-degree face turn (legacy method)
-    /// </summary>
-    private void ApplySingleFaceMove(char face, bool clockwise)
-    {
-        // Get the face direction in current orientation
-        var faceColor = GetFaceColorFromNotation(face);
-        var faceDirection = Orientation.GetDirectionForFace(faceColor);
-        
-        // Find all pieces that touch this face
-        var affectedPieces = _pieces.Values
-            .Where(piece => TouchesFace(piece.Position, faceDirection))
-            .ToList();
-        
-        // Create rotation matrix for 90-degree turn around the face axis
-        var rotationMatrix = CreateRotationMatrix(faceDirection, clockwise);
-        
-        // Apply rotation to each piece
-        var newPositions = new Dictionary<Position3D, CubePiece>();
-        
-        foreach (var piece in affectedPieces)
-        {
-            // Calculate new position
-            var newPosition = ApplyRotationMatrix(piece.Position, rotationMatrix);
-            
-            // Calculate color rotation based on the piece type and axis
-            var colorRotationSteps = CalculateColorRotation(piece, faceDirection, clockwise);
-            var rotatedPiece = piece.RotateColors(colorRotationSteps).MoveTo(newPosition);
-            
-            newPositions[newPosition] = rotatedPiece;
+                throw new ArgumentException($"Invalid face: {face}");
         }
         
-        // Update the cube with new positions
-        foreach (var (position, piece) in newPositions)
-        {
-            _pieces[position] = piece;
-        }
+        // Apply Python-style face rotation
+        ApplyPythonFaceRotation(facePosition, matrix);
     }
     
-    /// <summary>
-    /// Converts face notation (R, L, U, D, F, B) to color based on current orientation
-    /// </summary>
-    private CubeColor GetFaceColorFromNotation(char face)
-    {
-        return char.ToUpper(face) switch
-        {
-            'R' => Orientation.Right,
-            'L' => Orientation.Left,
-            'U' => Orientation.Up,
-            'D' => Orientation.Bottom,
-            'F' => Orientation.Front,
-            'B' => Orientation.Back,
-            _ => throw new ArgumentException($"Invalid face notation: {face}")
-        };
-    }
     
-    /// <summary>
-    /// Checks if a piece at the given position touches the specified face
-    /// </summary>
-    private static bool TouchesFace(Position3D position, Position3D faceDirection)
-    {
-        // A piece touches a face if it has the same coordinate as the face direction
-        // and that coordinate is at the extreme (+1 or -1)
-        return (faceDirection.X != 0 && position.X == faceDirection.X) ||
-               (faceDirection.Y != 0 && position.Y == faceDirection.Y) ||
-               (faceDirection.Z != 0 && position.Z == faceDirection.Z);
-    }
     
-    /// <summary>
-    /// Creates a rotation matrix for 90-degree rotation around the given axis
-    /// </summary>
-    private static int[,] CreateRotationMatrix(Position3D axis, bool clockwise)
-    {
-        return RotationMatrix.CreateRotationAroundAxis(axis, clockwise);
-    }
     
-    /// <summary>
-    /// Applies rotation matrix to a position vector
-    /// </summary>
-    private static Position3D ApplyRotationMatrix(Position3D position, int[,] matrix)
-    {
-        return RotationMatrix.Apply(matrix, position);
-    }
     
-    /// <summary>
-    /// Calculates how many steps to rotate piece colors based on move
-    /// </summary>
-    private static int CalculateColorRotation(CubePiece piece, Position3D faceDirection, bool clockwise)
-    {
-        // For now, return 0 (no color rotation) - this is a simplification
-        // In a full implementation, this would calculate the proper color rotation
-        // based on how the piece's orientation changes relative to the fixed coordinate system
-        return 0;
-    }
+    
     
     /// <summary>
     /// Validates that the cube state is physically possible
     /// </summary>
     public bool IsValidState()
     {
-        // Check that we have exactly 20 pieces
-        if (_pieces.Count != 20) return false;
+        // Check that we have exactly 26 pieces (8 corners + 12 edges + 6 centers)
+        if (_pieces.Count != 26) return false;
         
-        // Check that we have 8 corners and 12 edges
+        // Check that we have 8 corners, 12 edges, and 6 centers
         var corners = _pieces.Values.Count(p => p.Type == PieceType.Corner);
         var edges = _pieces.Values.Count(p => p.Type == PieceType.Edge);
-        if (corners != 8 || edges != 12) return false;
+        var centers = _pieces.Values.Count(p => p.Type == PieceType.Center);
+        if (corners != 8 || edges != 12 || centers != 6) return false;
         
         // Check that all positions are valid
         foreach (var piece in _pieces.Values)
@@ -525,15 +525,15 @@ public class Cube
     }
     
     /// <summary>
-    /// Checks if a position is valid for a piece (corner or edge)
+    /// Checks if a position is valid for a piece (corner, edge, or center)
     /// </summary>
     private static bool IsValidPiecePosition(Position3D position)
     {
         var coords = new[] { position.X, position.Y, position.Z };
         var nonZeroCount = coords.Count(c => c != 0);
         
-        // Corners have 3 non-zero coordinates, edges have 2
-        return nonZeroCount == 2 || nonZeroCount == 3;
+        // Corners have 3 non-zero coordinates, edges have 2, centers have 1
+        return nonZeroCount == 1 || nonZeroCount == 2 || nonZeroCount == 3;
     }
     
     /// <summary>
@@ -543,17 +543,12 @@ public class Cube
     {
         var dto = new CubeDto
         {
-            Version = "2.0",
-            Orientation = new OrientationDto 
-            { 
-                Front = Orientation.Front, 
-                Up = Orientation.Up 
-            },
+            Version = "3.0",
             Pieces = _pieces.Values.Select(p => new PieceDto
             {
                 SolvedPosition = new PositionDto { X = p.SolvedPosition.X, Y = p.SolvedPosition.Y, Z = p.SolvedPosition.Z },
                 CurrentPosition = new PositionDto { X = p.Position.X, Y = p.Position.Y, Z = p.Position.Z },
-                Colors = p.Colors.ToArray(),
+                Colors = p.Colors,
                 Type = p.Type
             }).ToArray()
         };
@@ -582,7 +577,7 @@ public class Cube
         if (dto == null)
             throw new ArgumentException("Invalid JSON format");
 
-        if (dto.Version != "2.0")
+        if (dto.Version != "3.0" && dto.Version != "2.0")
             throw new ArgumentException($"Unsupported cube format version: {dto.Version}");
 
         // Recreate pieces dictionary
@@ -593,40 +588,32 @@ public class Cube
             var solvedPos = new Position3D(pieceDto.SolvedPosition.X, pieceDto.SolvedPosition.Y, pieceDto.SolvedPosition.Z);
             var currentPos = new Position3D(pieceDto.CurrentPosition.X, pieceDto.CurrentPosition.Y, pieceDto.CurrentPosition.Z);
             
-            var piece = new CubePiece(solvedPos, pieceDto.Colors).MoveTo(currentPos);
+            // Use the Colors array directly (already CubeColor?[])
+            var colorsArray = pieceDto.Colors;
+            var piece = new CubePiece(solvedPos, colorsArray).MoveTo(currentPos);
             pieces[currentPos] = piece;
         }
 
-        // Recreate orientation
-        var orientation = new CubeOrientation(dto.Orientation.Front, dto.Orientation.Up);
-
-        return new Cube(pieces, orientation);
+        return new Cube(pieces);
     }
 
     public override string ToString()
     {
-        return $"Cube (Orientation: {Orientation}, Pieces: {_pieces.Count}, Solved: {IsSolved})";
+        return $"Cube (Pieces: {_pieces.Count}, Solved: {IsSolved})";
     }
 
     // DTO classes for JSON serialization
     private class CubeDto
     {
         public string Version { get; set; } = "";
-        public OrientationDto Orientation { get; set; } = new();
         public PieceDto[] Pieces { get; set; } = Array.Empty<PieceDto>();
-    }
-
-    private class OrientationDto
-    {
-        public CubeColor Front { get; set; }
-        public CubeColor Up { get; set; }
     }
 
     private class PieceDto
     {
         public PositionDto SolvedPosition { get; set; } = new();
         public PositionDto CurrentPosition { get; set; } = new();
-        public CubeColor[] Colors { get; set; } = Array.Empty<CubeColor>();
+        public CubeColor?[] Colors { get; set; } = Array.Empty<CubeColor?>();
         public PieceType Type { get; set; }
     }
 

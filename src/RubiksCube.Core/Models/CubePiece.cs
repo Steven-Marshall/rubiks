@@ -8,7 +8,8 @@ namespace RubiksCube.Core.Models;
 public enum PieceType
 {
     Corner,
-    Edge
+    Edge,
+    Center
 }
 
 /// <summary>
@@ -60,30 +61,31 @@ public class CubePiece : IEquatable<CubePiece>
     /// <summary>
     /// Current position of this piece in 3D space
     /// </summary>
-    public Position3D Position { get; private set; }
+    public Position3D Position { get; set; }
     
     /// <summary>
-    /// Type of piece (corner or edge)
+    /// Type of piece (corner, edge, or center)
     /// </summary>
     public PieceType Type { get; }
     
     /// <summary>
-    /// Colors on this piece. Corners have 3 colors, edges have 2.
-    /// Order represents the orientation of the piece.
+    /// Colors on this piece as 3-element array [X, Y, Z] with nulls for missing axes.
+    /// This matches the Python pglass/cube implementation exactly.
     /// </summary>
-    public IReadOnlyList<CubeColor> Colors { get; }
+    public CubeColor?[] Colors { get; set; }
     
     /// <summary>
     /// The original/solved position of this piece (immutable)
     /// </summary>
     public Position3D SolvedPosition { get; }
 
-    public CubePiece(Position3D solvedPosition, IEnumerable<CubeColor> colors)
+    public CubePiece(Position3D solvedPosition, CubeColor?[] colors)
     {
         SolvedPosition = solvedPosition;
         Position = solvedPosition;
         
-        var colorList = colors.ToList();
+        if (colors.Length != 3)
+            throw new ArgumentException("Colors array must have exactly 3 elements [X, Y, Z]");
         
         // Validate piece type based on position
         var nonZeroCoords = new[] { solvedPosition.X, solvedPosition.Y, solvedPosition.Z }
@@ -93,15 +95,23 @@ public class CubePiece : IEquatable<CubePiece>
         {
             3 => PieceType.Corner,
             2 => PieceType.Edge,
-            _ => throw new ArgumentException($"Invalid piece position: {solvedPosition}. Must be corner (3 non-zero) or edge (2 non-zero)")
+            1 => PieceType.Center,
+            _ => throw new ArgumentException($"Invalid piece position: {solvedPosition}. Must be corner (3 non-zero), edge (2 non-zero), or center (1 non-zero)")
         };
         
-        // Validate color count matches piece type
-        var expectedColors = Type == PieceType.Corner ? 3 : 2;
-        if (colorList.Count != expectedColors)
-            throw new ArgumentException($"{Type} piece must have exactly {expectedColors} colors");
+        // Validate color count matches piece type (count non-null colors)
+        var nonNullColors = colors.Count(c => c != null);
+        var expectedColors = Type switch
+        {
+            PieceType.Corner => 3,
+            PieceType.Edge => 2,
+            PieceType.Center => 1,
+            _ => throw new ArgumentException($"Unknown piece type: {Type}")
+        };
+        if (nonNullColors != expectedColors)
+            throw new ArgumentException($"{Type} piece must have exactly {expectedColors} non-null colors");
             
-        Colors = colorList.AsReadOnly();
+        Colors = (CubeColor?[])colors.Clone();
     }
     
     /// <summary>
@@ -117,27 +127,14 @@ public class CubePiece : IEquatable<CubePiece>
     }
     
     /// <summary>
-    /// Creates a new piece with rotated color orientation (for 90-degree rotations)
+    /// Swaps colors between two axes (Python-style rotation)
     /// </summary>
-    public CubePiece RotateColors(int steps = 1)
+    public void SwapColors(int axis1, int axis2)
     {
-        if (steps == 0) return this;
-        
-        var rotatedColors = new List<CubeColor>(Colors);
-        var actualSteps = ((steps % Colors.Count) + Colors.Count) % Colors.Count;
-        
-        for (int i = 0; i < actualSteps; i++)
-        {
-            var first = rotatedColors[0];
-            rotatedColors.RemoveAt(0);
-            rotatedColors.Add(first);
-        }
-        
-        var newPiece = new CubePiece(SolvedPosition, rotatedColors)
-        {
-            Position = Position
-        };
-        return newPiece;
+        if (axis1 < 0 || axis1 > 2 || axis2 < 0 || axis2 > 2)
+            throw new ArgumentException("Axis indices must be 0, 1, or 2");
+            
+        (Colors[axis1], Colors[axis2]) = (Colors[axis2], Colors[axis1]);
     }
     
     /// <summary>
@@ -160,19 +157,19 @@ public class CubePiece : IEquatable<CubePiece>
     }
     
     /// <summary>
-    /// Gets the expected colors for a piece at the given position
+    /// Gets the expected colors for a piece at the given position as 3-element array
     /// </summary>
-    private IEnumerable<CubeColor> GetExpectedColorsForPosition(Position3D pos)
+    private CubeColor?[] GetExpectedColorsForPosition(Position3D pos)
     {
-        var colors = new List<CubeColor>();
+        var colors = new CubeColor?[3];
         
         // Map coordinates to faces based on Western/BOY scheme
-        if (pos.X == -1) colors.Add(CubeColor.Red);    // Left
-        if (pos.X == 1) colors.Add(CubeColor.Orange);   // Right
-        if (pos.Y == -1) colors.Add(CubeColor.White);   // Bottom
-        if (pos.Y == 1) colors.Add(CubeColor.Yellow);   // Top
-        if (pos.Z == -1) colors.Add(CubeColor.Blue);    // Back
-        if (pos.Z == 1) colors.Add(CubeColor.Green);    // Front
+        if (pos.X == -1) colors[0] = CubeColor.Red;      // Left
+        if (pos.X == 1) colors[0] = CubeColor.Orange;    // Right
+        if (pos.Y == -1) colors[1] = CubeColor.White;    // Bottom
+        if (pos.Y == 1) colors[1] = CubeColor.Yellow;    // Top
+        if (pos.Z == -1) colors[2] = CubeColor.Blue;     // Back
+        if (pos.Z == 1) colors[2] = CubeColor.Green;     // Front
         
         return colors;
     }

@@ -90,7 +90,29 @@ public static class RotationMatrix
         var y = matrix[1, 0] * position.X + matrix[1, 1] * position.Y + matrix[1, 2] * position.Z;
         var z = matrix[2, 0] * position.X + matrix[2, 1] * position.Y + matrix[2, 2] * position.Z;
         
-        return new Position3D(x, y, z);
+        try 
+        {
+            return new Position3D(x, y, z);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new InvalidOperationException($"Failed to create Position3D({x}, {y}, {z}) from {position}: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Applies a 3x3 rotation matrix to raw coordinates (without Position3D validation)
+    /// </summary>
+    public static (int x, int y, int z) ApplyRaw(int[,] matrix, int x, int y, int z)
+    {
+        if (matrix.GetLength(0) != 3 || matrix.GetLength(1) != 3)
+            throw new ArgumentException("Matrix must be 3x3");
+            
+        var newX = matrix[0, 0] * x + matrix[0, 1] * y + matrix[0, 2] * z;
+        var newY = matrix[1, 0] * x + matrix[1, 1] * y + matrix[1, 2] * z;
+        var newZ = matrix[2, 0] * x + matrix[2, 1] * y + matrix[2, 2] * z;
+        
+        return (newX, newY, newZ);
     }
     
     /// <summary>
@@ -135,6 +157,69 @@ public static class RotationMatrix
         { 1, 0, 0 },
         { 0, 1, 0 },
         { 0, 0, 1 }
+    };
+    
+    // Python-style rotation matrices matching pglass/cube implementation
+    // These are used for the unified v3.0 solver-centric approach
+    
+    /// <summary>
+    /// 90 degree clockwise rotation in the XY plane (Z-axis rotation)
+    /// </summary>
+    public static int[,] ROT_XY_CW => new int[,]
+    {
+        { 0,  1, 0 },
+        { -1, 0, 0 },
+        { 0,  0, 1 }
+    };
+    
+    /// <summary>
+    /// 90 degree counter-clockwise rotation in the XY plane (Z-axis rotation)
+    /// </summary>
+    public static int[,] ROT_XY_CC => new int[,]
+    {
+        { 0, -1, 0 },
+        { 1,  0, 0 },
+        { 0,  0, 1 }
+    };
+    
+    /// <summary>
+    /// 90 degree clockwise rotation in the XZ plane (Y-axis rotation)
+    /// </summary>
+    public static int[,] ROT_XZ_CW => new int[,]
+    {
+        { 0, 0, -1 },
+        { 0, 1,  0 },
+        { 1, 0,  0 }
+    };
+    
+    /// <summary>
+    /// 90 degree counter-clockwise rotation in the XZ plane (Y-axis rotation)
+    /// </summary>
+    public static int[,] ROT_XZ_CC => new int[,]
+    {
+        { 0, 0,  1 },
+        { 0, 1,  0 },
+        { -1, 0, 0 }
+    };
+    
+    /// <summary>
+    /// 90 degree clockwise rotation in the YZ plane (X-axis rotation)
+    /// </summary>
+    public static int[,] ROT_YZ_CW => new int[,]
+    {
+        { 1,  0, 0 },
+        { 0,  0, 1 },
+        { 0, -1, 0 }
+    };
+    
+    /// <summary>
+    /// 90 degree counter-clockwise rotation in the YZ plane (X-axis rotation)
+    /// </summary>
+    public static int[,] ROT_YZ_CC => new int[,]
+    {
+        { 1, 0,  0 },
+        { 0, 0, -1 },
+        { 0, 1,  0 }
     };
     
     /// <summary>
