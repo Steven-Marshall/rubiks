@@ -159,7 +159,7 @@ public static class RotationMatrix
         { 0, 0, 1 }
     };
     
-    // Python-style rotation matrices matching pglass/cube implementation
+    // V3.0 rotation matrices matching pglass/cube implementation
     // These are used for the unified v3.0 solver-centric approach
     
     /// <summary>
@@ -221,26 +221,6 @@ public static class RotationMatrix
         { 0, 0, -1 },
         { 0, 1,  0 }
     };
-    
-    /// <summary>
-    /// Creates a matrix for N 90-degree rotations (0-3)
-    /// </summary>
-    public static int[,] CreateNRotations(Position3D axis, int rotations, bool clockwise = true)
-    {
-        rotations = ((rotations % 4) + 4) % 4; // Normalize to 0-3
-        
-        if (rotations == 0) return Identity;
-        
-        var singleRotation = CreateRotationAroundAxis(axis, clockwise);
-        var result = Identity;
-        
-        for (int i = 0; i < rotations; i++)
-        {
-            result = Multiply(result, singleRotation);
-        }
-        
-        return result;
-    }
     
     /// <summary>
     /// Checks if a matrix represents a valid rotation (determinant = ±1)

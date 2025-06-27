@@ -123,15 +123,7 @@ class Program
             // Apply each move in the algorithm
             foreach (var move in algorithm.Moves)
             {
-                if (move.Type == MoveType.Reorientation)
-                {
-                    cube.ApplyReorientation(move);
-                }
-                else if (move.Type == MoveType.Rotation)
-                {
-                    // Face rotations are now fully implemented
-                    cube.ApplyMove(move);
-                }
+                cube.ApplyMove(move);
             }
 
             // Output result
@@ -222,12 +214,12 @@ class Program
             }
 
             // Use PythonRenderer with format support
-            var pythonRenderer = new PythonRenderer(cube);
+            var cubeRenderer = new CubeRenderer(cube);
             
             string output = format.ToLowerInvariant() switch
             {
-                "ascii" => pythonRenderer.RenderAscii(),
-                "unicode" => pythonRenderer.RenderUnicode(),
+                "ascii" => cubeRenderer.RenderAscii(),
+                "unicode" => cubeRenderer.RenderUnicode(),
                 _ => throw new ArgumentException($"Unsupported format: {format}. Use 'ascii' or 'unicode'.")
             };
             
@@ -372,7 +364,8 @@ class Program
         Console.WriteLine("  Color scheme: Western/BOY (Green front, Yellow up, Orange right)");
         Console.WriteLine();
         Console.WriteLine("Algorithms:");
-        Console.WriteLine("  Reorientations: x, y, z (with ', 2 modifiers)");
-        Console.WriteLine("  Face rotations: R, L, U, D, F, B (coming in Phase 4d)");
+        Console.WriteLine("  All moves support ', 2 modifiers (e.g., R', U2, x')");
+        Console.WriteLine("  Face rotations: R, L, U, D, F, B");
+        Console.WriteLine("  Cube rotations: x, y, z");
     }
 }

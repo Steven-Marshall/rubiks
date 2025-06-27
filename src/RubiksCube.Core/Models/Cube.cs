@@ -65,7 +65,7 @@ public class Cube
     /// </summary>
     private void InitializeSolvedPieces()
     {
-        // 8 Corner pieces (3 colors each) - Python-style [X, Y, Z] arrays
+        // 8 Corner pieces (3 colors each) - V3.0 [X, Y, Z] arrays
         var corners = new[]
         {
             // Top corners (Y = 1)
@@ -81,7 +81,7 @@ public class Cube
             (new Position3D(1, -1, -1), new CubeColor?[] { CubeColor.Orange, CubeColor.White, CubeColor.Blue })   // Bottom-Right-Back
         };
         
-        // 12 Edge pieces - Python-style [X, Y, Z] arrays with nulls for missing axes
+        // 12 Edge pieces - V3.0 [X, Y, Z] arrays with nulls for missing axes
         var edges = new[]
         {
             // Top edges (Y = 1)
@@ -103,7 +103,7 @@ public class Cube
             (new Position3D(1, -1, 0), new CubeColor?[] { CubeColor.Orange, CubeColor.White, null })    // Bottom-Right
         };
         
-        // Center pieces (6 total) - Python style with single color and 2 nulls
+        // Center pieces (6 total) - V3.0 style with single color and 2 nulls
         var centers = new[]
         {
             (new Position3D(1, 0, 0), new CubeColor?[] { CubeColor.Orange, null, null }),    // Right center
@@ -239,7 +239,7 @@ public class Cube
     }
     
     /// <summary>
-    /// Rotates all pieces in the cube using the given rotation matrix (Python-style)
+    /// Rotates all pieces in the cube using the given rotation matrix (v3.0 style)
     /// </summary>
     private void RotateAllPieces(int[,] matrix)
     {
@@ -247,7 +247,7 @@ public class Cube
         
         foreach (var piece in _pieces.Values)
         {
-            var rotatedPiece = RotatePiecePython(piece, matrix);
+            var rotatedPiece = RotatePiece(piece, matrix);
             newPositions[rotatedPiece.Position] = rotatedPiece;
         }
         
@@ -260,13 +260,10 @@ public class Cube
     }
     
     /// <summary>
-    /// Applies a face rotation move (R, L, U, D, F, B) to the cube
+    /// Applies any move (R, L, U, D, F, B, x, y, z) to the cube
     /// </summary>
     public void ApplyMove(Move move)
     {
-        if (move.Type != MoveType.Rotation)
-            throw new ArgumentException($"Move {move} is not a rotation. Use ApplyReorientation for x/y/z moves.");
-            
         var direction = move.Direction == MoveDirection.CounterClockwise 
             ? RotationDirection.CounterClockwise 
             : RotationDirection.Clockwise;
@@ -275,71 +272,25 @@ public class Cube
         
         for (int i = 0; i < times; i++)
         {
-            ApplyFaceRotation(move.Face, direction);
-        }
-    }
-    
-    /// <summary>
-    /// Applies a reorientation move (x, y, z) to the cube
-    /// </summary>
-    public void ApplyReorientation(Move move)
-    {
-        if (move.Type != MoveType.Reorientation)
-            throw new ArgumentException($"Move {move} is not a reorientation. Use ApplyMove for rotations.");
-            
-        // Execute the appropriate reorientation method based on face and direction
-        switch (move.Face)
-        {
-            case 'x': // x rotation
-                if (move.Direction == MoveDirection.CounterClockwise)
-                    Xi();
-                else
-                    X();
-                break;
-                
-            case 'y': // y rotation
-                if (move.Direction == MoveDirection.CounterClockwise)
-                    Yi();
-                else
-                    Y();
-                break;
-                
-            case 'z': // z rotation
-                if (move.Direction == MoveDirection.CounterClockwise)
-                    Zi();
-                else
-                    Z();
-                break;
-                
-            default:
-                throw new ArgumentException($"Invalid reorientation face: {move.Face}");
-        }
-        
-        // For double moves, apply again
-        if (move.Direction == MoveDirection.Double)
-        {
-            switch (move.Face)
+            // Check if this is an axis rotation (x, y, z) or face rotation (R, L, U, D, F, B)
+            if (move.Face == 'x' || move.Face == 'y' || move.Face == 'z')
             {
-                case 'x':
-                    X();
-                    break;
-                case 'y':
-                    Y();
-                    break;
-                case 'z':
-                    Z();
-                    break;
+                ApplyAxisRotation(move.Face, direction);
+            }
+            else
+            {
+                ApplyFaceRotation(move.Face, direction);
             }
         }
     }
     
-    // ===== PYTHON-STYLE V3.0 ROTATION METHODS =====
-    // These implement the unified solver-centric approach from pglass/cube
+    // ===== V3.0 ROTATION METHODS =====
+    // These implement the unified solver-centric approach (based on pglass/cube)
     
     /// <summary>
-    /// Python-style piece rotation - applies matrix to piece position and swaps colors on changed axes
+    /// V3.0 piece rotation - applies matrix to piece position and swaps colors on changed axes
     /// </summary>
-    private static CubePiece RotatePiecePython(CubePiece piece, int[,] matrix)
+    private static CubePiece RotatePiece(CubePiece piece, int[,] matrix)
     {
         var oldPos = piece.Position;
         var newPos = RotationMatrix.Apply(matrix, oldPos);
@@ -408,11 +359,11 @@ public class Cube
     
     
     /// <summary>
-    /// Python-style face rotation - applies rotation to all pieces on a face
+    /// V3.0 face rotation - applies rotation to all pieces on a face
     /// </summary>
-    private void ApplyPythonFaceRotation(Position3D face, int[,] matrix)
+    private void ApplyFaceRotationMatrix(Position3D face, int[,] matrix)
     {
-        var affectedPieces = GetPiecesOnPythonFace(face);
+        var affectedPieces = GetPiecesOnFace(face);
         var updates = new Dictionary<Position3D, CubePiece>();
         
         // First, remove all affected pieces from their current positions
@@ -424,15 +375,15 @@ public class Cube
         // Then, rotate and place them in their new positions
         foreach (var piece in affectedPieces)
         {
-            var rotatedPiece = RotatePiecePython(piece, matrix);
+            var rotatedPiece = RotatePiece(piece, matrix);
             _pieces[rotatedPiece.Position] = rotatedPiece;
         }
     }
     
     /// <summary>
-    /// Gets pieces that belong to a specific face using Python-style coordinate system
+    /// Gets pieces that belong to a specific face using v3.0 coordinate system
     /// </summary>
-    private List<CubePiece> GetPiecesOnPythonFace(Position3D face)
+    private List<CubePiece> GetPiecesOnFace(Position3D face)
     {
         return _pieces.Values.Where(piece =>
         {
@@ -450,7 +401,7 @@ public class Cube
     /// </summary>
     private void ApplyFaceRotation(char face, RotationDirection direction)
     {
-        // Use Python-style face rotation
+        // Use v3.0 face rotation
         var isClockwise = direction == RotationDirection.Clockwise;
         
         // Get the appropriate rotation matrix based on face and direction
@@ -487,15 +438,48 @@ public class Cube
                 throw new ArgumentException($"Invalid face: {face}");
         }
         
-        // Apply Python-style face rotation
-        ApplyPythonFaceRotation(facePosition, matrix);
+        // Apply v3.0 face rotation
+        ApplyFaceRotationMatrix(facePosition, matrix);
     }
     
+    /// <summary>
+    /// Applies axis rotation (x, y, z) to the entire cube
+    /// </summary>
+    private void ApplyAxisRotation(char axis, RotationDirection direction)
+    {
+        var isClockwise = direction == RotationDirection.Clockwise;
+        
+        // Get the appropriate rotation matrix for the entire cube
+        int[,] matrix = axis switch
+        {
+            'x' => isClockwise ? RotationMatrix.ROT_YZ_CW : RotationMatrix.ROT_YZ_CC,
+            'y' => isClockwise ? RotationMatrix.ROT_XZ_CW : RotationMatrix.ROT_XZ_CC,
+            'z' => isClockwise ? RotationMatrix.ROT_XY_CW : RotationMatrix.ROT_XY_CC,
+            _ => throw new ArgumentException($"Invalid axis: {axis}")
+        };
+        
+        // Apply rotation to ALL pieces (this is an axis rotation, not a face rotation)
+        ApplyAxisRotationMatrix(matrix);
+    }
     
-    
-    
-    
-    
+    /// <summary>
+    /// V3.0 axis rotation - applies rotation to ALL pieces in the cube
+    /// </summary>
+    private void ApplyAxisRotationMatrix(int[,] matrix)
+    {
+        var updates = new Dictionary<Position3D, CubePiece>();
+        
+        // First, remove all pieces from their current positions
+        var allPieces = _pieces.Values.ToList();
+        _pieces.Clear();
+        
+        // Then, rotate and place them in their new positions
+        foreach (var piece in allPieces)
+        {
+            var rotatedPiece = RotatePiece(piece, matrix);
+            _pieces[rotatedPiece.Position] = rotatedPiece;
+        }
+    }
     
     /// <summary>
     /// Validates that the cube state is physically possible

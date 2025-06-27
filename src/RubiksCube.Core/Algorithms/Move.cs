@@ -1,22 +1,6 @@
 namespace RubiksCube.Core.Algorithms;
 
 /// <summary>
-/// Represents the type of move - either a reorientation or a rotation
-/// </summary>
-public enum MoveType
-{
-    /// <summary>
-    /// Reorientation moves (x, y, z) - change viewing perspective only
-    /// </summary>
-    Reorientation,
-    
-    /// <summary>
-    /// Rotation moves (R, L, U, D, F, B) - actually move pieces
-    /// </summary>
-    Rotation
-}
-
-/// <summary>
 /// Represents the direction of a move
 /// </summary>
 public enum MoveDirection
@@ -54,7 +38,7 @@ public enum RotationDirection
 }
 
 /// <summary>
-/// Represents a single move in an algorithm (either reorientation or rotation)
+/// Represents a single move in an algorithm
 /// </summary>
 public class Move : IEquatable<Move>
 {
@@ -69,11 +53,6 @@ public class Move : IEquatable<Move>
     public MoveDirection Direction { get; }
     
     /// <summary>
-    /// The type of move (reorientation vs rotation)
-    /// </summary>
-    public MoveType Type { get; }
-    
-    /// <summary>
     /// True if this is a wide move (lowercase letter, affects 2 layers)
     /// </summary>
     public bool IsWide { get; }
@@ -85,24 +64,9 @@ public class Move : IEquatable<Move>
     {
         Face = face; // Preserve case for Singmaster notation
         Direction = direction;
-        Type = DetermineMoveType(Face);
         IsWide = DetermineIfWide(Face);
         
         ValidateMove();
-    }
-    
-    /// <summary>
-    /// Determines if this is a reorientation or rotation move
-    /// </summary>
-    private static MoveType DetermineMoveType(char face)
-    {
-        return face switch
-        {
-            'x' or 'y' or 'z' => MoveType.Reorientation,
-            'R' or 'L' or 'U' or 'D' or 'F' or 'B' => MoveType.Rotation,
-            'r' or 'l' or 'u' or 'd' or 'f' or 'b' => MoveType.Rotation, // Wide moves (future)
-            _ => throw new ArgumentException($"Invalid move face: {face}")
-        };
     }
     
     /// <summary>

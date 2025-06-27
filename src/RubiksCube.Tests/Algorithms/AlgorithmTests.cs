@@ -140,27 +140,9 @@ public class AlgorithmTests
         Assert.True(repeated.IsEmpty);
     }
     
-    [Fact]
-    public void GetReorientations_MixedAlgorithm_ShouldReturnOnlyReorientations()
-    {
-        var algorithm = Algorithm.Parse("x R U R' U' x'").Value;
-        var reorientations = algorithm.GetReorientations();
-        
-        Assert.Equal("x x'", reorientations.ToString());
-        Assert.Equal(2, reorientations.Length);
-        Assert.All(reorientations.Moves, move => Assert.Equal(MoveType.Reorientation, move.Type));
-    }
+    // Note: GetReorientations method removed in v3.0 - all moves handled uniformly
     
-    [Fact]
-    public void GetRotations_MixedAlgorithm_ShouldReturnOnlyRotations()
-    {
-        var algorithm = Algorithm.Parse("x R U R' U' x'").Value;
-        var rotations = algorithm.GetRotations();
-        
-        Assert.Equal("R U R' U'", rotations.ToString());
-        Assert.Equal(4, rotations.Length);
-        Assert.All(rotations.Moves, move => Assert.Equal(MoveType.Rotation, move.Type));
-    }
+    // Note: GetRotations method removed in v3.0 - all moves handled uniformly
     
     [Theory]
     [InlineData("R U R' U'")]
@@ -185,15 +167,15 @@ public class AlgorithmTests
     }
     
     [Fact]
-    public void ToDetailedString_MixedAlgorithm_ShouldShowMoveTypes()
+    public void ToDetailedString_MixedAlgorithm_ShouldShowMoveSequence()
     {
         var algorithm = Algorithm.Parse("x R U R' U' x'").Value;
         var detailed = algorithm.ToDetailedString();
         
-        Assert.Contains("(Reorientation)", detailed);
-        Assert.Contains("(Rotation)", detailed);
+        // Should contain the move sequence
         Assert.Contains("x", detailed);
         Assert.Contains("R", detailed);
+        Assert.Contains("U", detailed);
     }
     
     [Fact]

@@ -13,19 +13,19 @@ public class CaseSensitivityDemoTests
         // Standard single-layer moves (uppercase)
         var R = Move.Parse("R");
         Assert.Equal('R', R.Face);
-        Assert.Equal(MoveType.Rotation, R.Type);
+        // Note: Move type distinction removed in v3.0
         Assert.False(R.IsWide);
         
         // Wide moves (lowercase) - affects 2 layers
         var r = Move.Parse("r");
         Assert.Equal('r', r.Face);
-        Assert.Equal(MoveType.Rotation, r.Type);
+        // Note: Move type distinction removed in v3.0
         Assert.True(r.IsWide);
         
         // Cube rotations (lowercase)
         var x = Move.Parse("x");
         Assert.Equal('x', x.Face);
-        Assert.Equal(MoveType.Reorientation, x.Type);
+        // Note: Move type distinction removed in v3.0
         Assert.False(x.IsWide);
         
         // They are different moves!
@@ -48,13 +48,7 @@ public class CaseSensitivityDemoTests
         Assert.Equal("u'", algorithm.Moves[4].ToString()); // Wide move prime
         Assert.Equal("x'", algorithm.Moves[5].ToString()); // Reorientation prime
         
-        // Verify move types
-        Assert.Equal(MoveType.Reorientation, algorithm.Moves[0].Type);
-        Assert.Equal(MoveType.Rotation, algorithm.Moves[1].Type);
-        Assert.Equal(MoveType.Rotation, algorithm.Moves[2].Type);
-        Assert.Equal(MoveType.Rotation, algorithm.Moves[3].Type);
-        Assert.Equal(MoveType.Rotation, algorithm.Moves[4].Type);
-        Assert.Equal(MoveType.Reorientation, algorithm.Moves[5].Type);
+        // Note: Move type distinction removed in v3.0 - all moves handled uniformly
         
         // Verify wide move detection
         Assert.False(algorithm.Moves[0].IsWide); // x

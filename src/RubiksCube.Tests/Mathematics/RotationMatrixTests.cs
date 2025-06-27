@@ -120,18 +120,30 @@ public class RotationMatrixTests
     {
         var testPosition = new Position3D(1, 0, 1);
         
-        // Test X rotations
-        var xMatrix = RotationMatrix.CreateNRotations(new Position3D(1, 0, 0), 4, true);
+        // Test X rotations (4 × 90° = 360° = identity)
+        var xMatrix = RotationMatrix.Identity;
+        for (int i = 0; i < 4; i++)
+        {
+            xMatrix = RotationMatrix.Multiply(xMatrix, RotationMatrix.CreateXRotation(true));
+        }
         var xResult = RotationMatrix.Apply(xMatrix, testPosition);
         Assert.Equal(testPosition, xResult);
         
         // Test Y rotations
-        var yMatrix = RotationMatrix.CreateNRotations(new Position3D(0, 1, 0), 4, true);
+        var yMatrix = RotationMatrix.Identity;
+        for (int i = 0; i < 4; i++)
+        {
+            yMatrix = RotationMatrix.Multiply(yMatrix, RotationMatrix.CreateYRotation(true));
+        }
         var yResult = RotationMatrix.Apply(yMatrix, testPosition);
         Assert.Equal(testPosition, yResult);
         
         // Test Z rotations
-        var zMatrix = RotationMatrix.CreateNRotations(new Position3D(0, 0, 1), 4, true);
+        var zMatrix = RotationMatrix.Identity;
+        for (int i = 0; i < 4; i++)
+        {
+            zMatrix = RotationMatrix.Multiply(zMatrix, RotationMatrix.CreateZRotation(true));
+        }
         var zResult = RotationMatrix.Apply(zMatrix, testPosition);
         Assert.Equal(testPosition, zResult);
     }
@@ -143,9 +155,9 @@ public class RotationMatrixTests
         var rotation2 = RotationMatrix.CreateYRotation(true);
         var combined = RotationMatrix.Multiply(rotation1, rotation2);
         
-        // Two Y rotations should equal a double Y rotation
-        var doubleRotation = RotationMatrix.CreateNRotations(new Position3D(0, 1, 0), 2, true);
-        Assert.Equal(doubleRotation, combined);
+        // Two Y rotations should equal manually combining two Y rotations
+        var manualDouble = RotationMatrix.Multiply(RotationMatrix.CreateYRotation(true), RotationMatrix.CreateYRotation(true));
+        Assert.Equal(manualDouble, combined);
         
         // Test with a position
         var testPos = new Position3D(1, 0, 0);

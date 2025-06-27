@@ -4,7 +4,7 @@ using RubiksCube.Core.Algorithms;
 namespace RubiksCube.Tests.Models;
 
 /// <summary>
-/// Validates color rotation behavior based on Python's 2-axis swap rule
+/// Validates color rotation behavior based on v3.0's 2-axis swap rule
 /// When a piece moves and 2 coordinates change, colors swap between those axis indices
 /// </summary>
 public class ColorRotationValidationTests
@@ -66,7 +66,7 @@ public class ColorRotationValidationTests
         // Find where the corner moved to
         var movedCorner = cube.Pieces.First(p => p.SolvedPosition.Equals(trackedCorner.SolvedPosition));
         
-        // Verify known correct result from Python's algorithm:
+        // Verify known correct result from v3.0 algorithm:
         // (1,1,1) → (1,1,-1) with colors [Orange, Green, Yellow]
         Assert.Equal(new Position3D(1, 1, -1), movedCorner.Position);
         Assert.Equal(CubeColor.Orange, movedCorner.Colors[0]); // X unchanged  
@@ -124,7 +124,7 @@ public class ColorRotationValidationTests
         Assert.Equal(CubeColor.Yellow, originalColors[1]); // Y color
         Assert.Equal(CubeColor.Green, originalColors[2]);  // Z color
         
-        cube.ApplyReorientation(new Move('x'));
+        cube.ApplyMove(new Move('x'));
         
         var movedPiece = cube.Pieces.First(p => p.SolvedPosition.Equals(trackedPiece.SolvedPosition));
         
@@ -157,10 +157,7 @@ public class ColorRotationValidationTests
             var testCube = Cube.CreateSolved();
             var move = new Move(moveChar);
             
-            if (move.Type == MoveType.Rotation)
-                testCube.ApplyMove(move);
-            else
-                testCube.ApplyReorientation(move);
+            testCube.ApplyMove(move);
             
             // Check all centers
             foreach (var center in testCube.Centers)

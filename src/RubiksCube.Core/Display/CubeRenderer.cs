@@ -4,14 +4,30 @@ using System.Text;
 namespace RubiksCube.Core.Display;
 
 /// <summary>
-/// Clean renderer for Python-style cube architecture with 3-element color arrays.
+/// Display format options for cube rendering
+/// </summary>
+public enum DisplayFormat
+{
+    /// <summary>
+    /// Unicode symbols with Hangul Filler spacing
+    /// </summary>
+    Unicode,
+    
+    /// <summary>
+    /// ASCII letters with regular spacing
+    /// </summary>
+    ASCII
+}
+
+/// <summary>
+/// Clean renderer for v3.0 cube architecture with 3-element color arrays.
 /// No orientation complexity - direct coordinate to color mapping.
 /// </summary>
-public class PythonRenderer
+public class CubeRenderer
 {
     private readonly Cube _cube;
 
-    public PythonRenderer(Cube cube)
+    public CubeRenderer(Cube cube)
     {
         _cube = cube ?? throw new ArgumentNullException(nameof(cube));
     }
@@ -39,7 +55,7 @@ public class PythonRenderer
     {
         var sb = new StringBuilder();
         
-        // Get face colors using Python approach: pos.dot(axis) > 0
+        // Get face colors using v3.0 approach: pos.dot(axis) > 0
         var up = GetFaceColors(new Position3D(0, 1, 0), 1);    // pos.y > 0, Colors[1] 
         var down = GetFaceColors(new Position3D(0, -1, 0), 1);  // pos.y < 0, Colors[1]
         var left = GetFaceColors(new Position3D(-1, 0, 0), 0);  // pos.x < 0, Colors[0]
@@ -68,7 +84,7 @@ public class PythonRenderer
                "ㅤㅤㅤ{48}{49}{50}\n" +
                "ㅤㅤㅤ{51}{52}{53}");
                        
-        // Build color array exactly like Python _color_list method
+        // Build color array using v3.0 method (based on pglass/cube _color_list)
         var colorList = new List<CubeColor>();
         colorList.AddRange(up);                    // 9 colors for top
         colorList.AddRange(left.Take(3));          // 3 colors for left row 1
@@ -100,11 +116,11 @@ public class PythonRenderer
     }
 
     /// <summary>
-    /// Get face colors using Python approach: extract pieces with positive dot product
+    /// Get face colors using v3.0 approach: extract pieces with positive dot product
     /// </summary>
     private CubeColor[] GetFaceColors(Position3D axis, int colorIndex)
     {
-        // Get all pieces on this face using Python logic: pos.dot(axis) > 0
+        // Get all pieces on this face using v3.0 logic: pos.dot(axis) > 0
         // This includes corners, edges, AND centers naturally
         var facePieces = _cube.Pieces
             .Where(p => DotProduct(p.Position, axis) > 0)

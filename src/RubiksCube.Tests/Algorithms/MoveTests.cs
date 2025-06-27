@@ -5,21 +5,20 @@ namespace RubiksCube.Tests.Algorithms;
 public class MoveTests
 {
     [Theory]
-    [InlineData('R', MoveType.Rotation)]
-    [InlineData('L', MoveType.Rotation)]
-    [InlineData('U', MoveType.Rotation)]
-    [InlineData('D', MoveType.Rotation)]
-    [InlineData('F', MoveType.Rotation)]
-    [InlineData('B', MoveType.Rotation)]
-    [InlineData('x', MoveType.Reorientation)]
-    [InlineData('y', MoveType.Reorientation)]
-    [InlineData('z', MoveType.Reorientation)]
-    public void Constructor_ValidFaces_ShouldCreateCorrectMoveType(char face, MoveType expectedType)
+    [InlineData('R')]
+    [InlineData('L')]
+    [InlineData('U')]
+    [InlineData('D')]
+    [InlineData('F')]
+    [InlineData('B')]
+    [InlineData('x')]
+    [InlineData('y')]
+    [InlineData('z')]
+    public void Constructor_ValidFaces_ShouldCreateMove(char face)
     {
         var move = new Move(face);
         
         Assert.Equal(face, move.Face);
-        Assert.Equal(expectedType, move.Type);
         Assert.Equal(MoveDirection.Clockwise, move.Direction);
     }
     
@@ -90,7 +89,7 @@ public class MoveTests
     [InlineData("x", MoveDirection.Clockwise, "x'", MoveDirection.CounterClockwise)]
     [InlineData("x'", MoveDirection.CounterClockwise, "x", MoveDirection.Clockwise)]
     [InlineData("x2", MoveDirection.Double, "x2", MoveDirection.Double)]
-    public void Inverse_AllDirections_ShouldReturnCorrectInverse(string originalMove, MoveDirection originalDirection, string expectedInverse, MoveDirection expectedDirection)
+    public void Inverse_AllDirections_ShouldReturnCorrectInverse(string originalMove, MoveDirection _, string expectedInverse, MoveDirection expectedDirection)
     {
         var move = Move.Parse(originalMove);
         var inverse = move.Inverse();
@@ -152,29 +151,6 @@ public class MoveTests
     }
     
     [Theory]
-    [InlineData('R', MoveType.Rotation)]
-    [InlineData('L', MoveType.Rotation)]
-    [InlineData('U', MoveType.Rotation)]
-    [InlineData('D', MoveType.Rotation)]
-    [InlineData('F', MoveType.Rotation)]
-    [InlineData('B', MoveType.Rotation)]
-    public void RotationMoves_ShouldHaveCorrectType(char face, MoveType expectedType)
-    {
-        var move = new Move(face);
-        Assert.Equal(expectedType, move.Type);
-    }
-    
-    [Theory]
-    [InlineData('x', MoveType.Reorientation)]
-    [InlineData('y', MoveType.Reorientation)]
-    [InlineData('z', MoveType.Reorientation)]
-    public void ReorientationMoves_ShouldHaveCorrectType(char face, MoveType expectedType)
-    {
-        var move = new Move(face);
-        Assert.Equal(expectedType, move.Type);
-    }
-    
-    [Theory]
     [InlineData('R', false)]  // Single layer
     [InlineData('r', true)]   // Wide move
     [InlineData('U', false)]  // Single layer
@@ -198,6 +174,6 @@ public class MoveTests
         Assert.Equal(expectedFace, move.Face);
         Assert.Equal(expectedDirection, move.Direction);
         Assert.Equal(expectedIsWide, move.IsWide);
-        Assert.Equal(MoveType.Rotation, move.Type);
+        // Note: Move type distinction has been removed in v3.0
     }
 }

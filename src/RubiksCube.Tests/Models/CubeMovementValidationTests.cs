@@ -30,7 +30,7 @@ public class CubeMovementValidationTests
         
         // Apply X rotation
         var xMove = new Move('x');
-        cube.ApplyReorientation(xMove);
+        cube.ApplyMove(xMove);
         
         // Pieces on X-axis should NOT move
         foreach (var piece in piecesOnXAxis)
@@ -66,7 +66,7 @@ public class CubeMovementValidationTests
         var originalOffAxis = piecesOffYAxis.ToDictionary(p => p.SolvedPosition, p => p.Position);
         
         var yMove = new Move('y');
-        cube.ApplyReorientation(yMove);
+        cube.ApplyMove(yMove);
         
         var movedCount = 0;
         foreach (var originalPiece in piecesOffYAxis)
@@ -94,7 +94,7 @@ public class CubeMovementValidationTests
         var originalOffAxis = piecesOffZAxis.ToDictionary(p => p.SolvedPosition, p => p.Position);
         
         var zMove = new Move('z');
-        cube.ApplyReorientation(zMove);
+        cube.ApplyMove(zMove);
         
         var movedCount = 0;
         foreach (var originalPiece in piecesOffZAxis)
@@ -198,10 +198,7 @@ public class CubeMovementValidationTests
         {
             var testCube = Cube.CreateSolved();
             
-            if (move.Type == MoveType.Rotation)
-                testCube.ApplyMove(move);
-            else
-                testCube.ApplyReorientation(move);
+            testCube.ApplyMove(move);
             
             // Verify piece count
             Assert.Equal(26, testCube.Pieces.Count);
@@ -235,10 +232,7 @@ public class CubeMovementValidationTests
             // Apply same move 4 times
             for (int i = 0; i < 4; i++)
             {
-                if (move.Type == MoveType.Rotation)
-                    cube.ApplyMove(move);
-                else
-                    cube.ApplyReorientation(move);
+                cube.ApplyMove(move);
             }
             
             // Should be back to original
@@ -279,16 +273,8 @@ public class CubeMovementValidationTests
             var move1 = new Move(face, dir1);
             var move2 = new Move(face, dir2);
             
-            if (move1.Type == MoveType.Rotation)
-            {
-                cube.ApplyMove(move1);
-                cube.ApplyMove(move2);
-            }
-            else
-            {
-                cube.ApplyReorientation(move1);
-                cube.ApplyReorientation(move2);
-            }
+            cube.ApplyMove(move1);
+            cube.ApplyMove(move2);
             
             var finalCount = cube.Pieces.Count(p => p.Position.Equals(p.SolvedPosition));
             Assert.Equal(26, finalCount); // All back to solved

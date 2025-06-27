@@ -1,5 +1,4 @@
 using CSharpFunctionalExtensions;
-using System.Text.RegularExpressions;
 
 namespace RubiksCube.Core.Algorithms;
 
@@ -134,24 +133,6 @@ public class Algorithm : IEquatable<Algorithm>
     }
     
     /// <summary>
-    /// Gets only the reorientation moves from this algorithm
-    /// </summary>
-    public Algorithm GetReorientations()
-    {
-        var reorientationMoves = _moves.Where(m => m.Type == MoveType.Reorientation);
-        return new Algorithm(reorientationMoves);
-    }
-    
-    /// <summary>
-    /// Gets only the rotation moves from this algorithm
-    /// </summary>
-    public Algorithm GetRotations()
-    {
-        var rotationMoves = _moves.Where(m => m.Type == MoveType.Rotation);
-        return new Algorithm(rotationMoves);
-    }
-    
-    /// <summary>
     /// Converts the algorithm back to Singmaster notation
     /// </summary>
     public override string ToString()
@@ -161,13 +142,13 @@ public class Algorithm : IEquatable<Algorithm>
     }
     
     /// <summary>
-    /// Gets a detailed string representation with move types
+    /// Gets a detailed string representation
     /// </summary>
     public string ToDetailedString()
     {
         if (IsEmpty) return "Empty algorithm";
         
-        var moveDescriptions = _moves.Select(m => $"{m} ({m.Type})");
+        var moveDescriptions = _moves.Select(m => m.ToString());
         return string.Join(", ", moveDescriptions);
     }
     
