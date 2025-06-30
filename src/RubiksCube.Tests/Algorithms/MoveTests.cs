@@ -14,6 +14,9 @@ public class MoveTests
     [InlineData('x')]
     [InlineData('y')]
     [InlineData('z')]
+    [InlineData('M')]
+    [InlineData('E')]
+    [InlineData('S')]
     public void Constructor_ValidFaces_ShouldCreateMove(char face)
     {
         var move = new Move(face);
@@ -39,9 +42,6 @@ public class MoveTests
     
     [Theory]
     [InlineData('A')]
-    [InlineData('M')]
-    [InlineData('E')]
-    [InlineData('S')]
     [InlineData('1')]
     [InlineData(' ')]
     public void Constructor_InvalidFaces_ShouldThrow(char invalidFace)

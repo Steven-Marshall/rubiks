@@ -366,6 +366,7 @@ class Program
         Console.WriteLine("Algorithms:");
         Console.WriteLine("  All moves support ', 2 modifiers (e.g., R', U2, x')");
         Console.WriteLine("  Face rotations: R, L, U, D, F, B");
+        Console.WriteLine("  Slice rotations: M, E, S");
         Console.WriteLine("  Cube rotations: x, y, z");
     }
 }

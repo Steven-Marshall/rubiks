@@ -20,6 +20,13 @@ RubiksCube is a C# .NET 9 cross-platform CLI application and library for solving
 
 **IMPORTANT:** You can always run `dotnet` commands without asking for permission. This includes `dotnet build`, `dotnet test`, `dotnet run`, etc. Just use them as needed.
 
+**GIT COMMITS:** All commits must include Steven Marshall <steven@smarshal.co.uk> as co-author. Use the standard format:
+
+```
+Co-Authored-By: Steven Marshall <steven@smarshal.co.uk>
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
 ## Architecture
 
 ### Project Structure

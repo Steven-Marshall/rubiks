@@ -86,7 +86,7 @@ public class Move : IEquatable<Move>
     /// </summary>
     private void ValidateMove()
     {
-        var validFaces = new[] { 'R', 'L', 'U', 'D', 'F', 'B', 'r', 'l', 'u', 'd', 'f', 'b', 'x', 'y', 'z' };
+        var validFaces = new[] { 'R', 'L', 'U', 'D', 'F', 'B', 'r', 'l', 'u', 'd', 'f', 'b', 'x', 'y', 'z', 'M', 'E', 'S' };
         
         if (!validFaces.Contains(Face))
         {

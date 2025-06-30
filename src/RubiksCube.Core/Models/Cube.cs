@@ -272,10 +272,14 @@ public class Cube
         
         for (int i = 0; i < times; i++)
         {
-            // Check if this is an axis rotation (x, y, z) or face rotation (R, L, U, D, F, B)
+            // Check move type: axis rotation (x, y, z), slice move (M, E, S), or face rotation (R, L, U, D, F, B)
             if (move.Face == 'x' || move.Face == 'y' || move.Face == 'z')
             {
                 ApplyAxisRotation(move.Face, direction);
+            }
+            else if (move.Face == 'M' || move.Face == 'E' || move.Face == 'S')
+            {
+                ApplySliceRotation(move.Face, direction);
             }
             else
             {
@@ -460,6 +464,83 @@ public class Cube
         
         // Apply rotation to ALL pieces (this is an axis rotation, not a face rotation)
         ApplyAxisRotationMatrix(matrix);
+    }
+    
+    /// <summary>
+    /// Applies slice rotation (M, E, S) to the middle layer pieces
+    /// </summary>
+    private void ApplySliceRotation(char slice, RotationDirection direction)
+    {
+        var isClockwise = direction == RotationDirection.Clockwise;
+        
+        // Get the appropriate rotation matrix and slice position for each slice
+        int[,] matrix;
+        Position3D slicePosition;
+        
+        switch (slice)
+        {
+            case 'M': // Middle slice between L and R faces (X = 0)
+                // M move uses ROT_YZ_CC (same as L face direction) for standard M
+                matrix = isClockwise ? RotationMatrix.ROT_YZ_CC : RotationMatrix.ROT_YZ_CW;
+                slicePosition = new Position3D(0, 0, 0); // X = 0 plane
+                break;
+            case 'E': // Equatorial slice between U and D faces (Y = 0) 
+                // E move uses XZ rotation (same as U/D faces) but counter-clockwise matches D direction
+                matrix = isClockwise ? RotationMatrix.ROT_XZ_CC : RotationMatrix.ROT_XZ_CW;
+                slicePosition = new Position3D(0, 0, 0); // Y = 0 plane
+                break;
+            case 'S': // Standing slice between F and B faces (Z = 0)
+                // S move uses XY rotation (same as F/B faces) and clockwise matches F direction
+                matrix = isClockwise ? RotationMatrix.ROT_XY_CW : RotationMatrix.ROT_XY_CC;
+                slicePosition = new Position3D(0, 0, 0); // Z = 0 plane
+                break;
+            default:
+                throw new ArgumentException($"Invalid slice: {slice}");
+        }
+        
+        // Apply v3.0 slice rotation
+        ApplySliceRotationMatrix(slice, matrix);
+    }
+    
+    /// <summary>
+    /// V3.0 slice rotation - applies rotation to pieces in the specified slice plane
+    /// </summary>
+    private void ApplySliceRotationMatrix(char slice, int[,] matrix)
+    {
+        var affectedPieces = GetPiecesOnSlice(slice);
+        var updates = new Dictionary<Position3D, CubePiece>();
+        
+        // First, remove all affected pieces from their current positions
+        foreach (var piece in affectedPieces)
+        {
+            _pieces.Remove(piece.Position);
+        }
+        
+        // Then, rotate and place them in their new positions
+        foreach (var piece in affectedPieces)
+        {
+            var rotatedPiece = RotatePiece(piece, matrix);
+            _pieces[rotatedPiece.Position] = rotatedPiece;
+        }
+    }
+    
+    /// <summary>
+    /// Gets pieces that belong to a specific slice using v3.0 coordinate system
+    /// Includes ALL pieces on the slice plane (edges AND centers)
+    /// </summary>
+    private List<CubePiece> GetPiecesOnSlice(char slice)
+    {
+        return _pieces.Values.Where(piece =>
+        {
+            var pos = piece.Position;
+            return slice switch
+            {
+                'M' => pos.X == 0, // Middle slice: pieces with X = 0 (between L and R faces)
+                'E' => pos.Y == 0, // Equatorial slice: pieces with Y = 0 (between U and D faces)
+                'S' => pos.Z == 0, // Standing slice: pieces with Z = 0 (between F and B faces)
+                _ => throw new ArgumentException($"Invalid slice: {slice}")
+            };
+        }).ToList();
     }
     
     /// <summary>
