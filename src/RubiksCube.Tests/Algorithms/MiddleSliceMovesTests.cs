@@ -202,39 +202,43 @@ public class MiddleSliceMovesTests
     }
     
     [Fact]
-    public void MiddleSliceMoves_ShouldNotAffectCenterPieces()
+    public void MiddleSliceMoves_ShouldMoveCenterPiecesCorrectly()
     {
-        // Center pieces should never move, regardless of the rotation
+        // In v3.0 architecture, center pieces DO move during slice rotations
         var cube = Cube.CreateSolved();
-        var centers = cube.Centers.ToList();
         
-        // Store original center positions and colors
-        var originalCenters = centers.ToDictionary(
-            c => c.SolvedPosition,
-            c => new { Position = c.Position, Colors = c.Colors.ToArray() }
-        );
+        // Test M move (middle slice between L and R)
+        cube.ApplyMove(new Move('M'));
         
-        // Apply various middle slice moves
-        var moves = new[] { 'M', 'E', 'S' };
-        foreach (var moveChar in moves)
-        {
-            var testCube = Cube.CreateSolved();
-            var move = new Move(moveChar);
-            
-            testCube.ApplyMove(move);
-            
-            // Check all centers remain unchanged
-            foreach (var center in testCube.Centers)
-            {
-                var original = originalCenters[center.SolvedPosition];
-                
-                // Center should not move
-                Assert.Equal(original.Position, center.Position);
-                
-                // Center colors should not change
-                Assert.Equal(original.Colors, center.Colors);
-            }
-        }
+        // M move rotates centers in the X=0 plane (Front, Up, Back, Down)
+        // Following L rotation direction
+        var frontCenter = cube.Pieces.Single(p => p.SolvedPosition.Equals(new Position3D(0, 0, 1)));
+        var upCenter = cube.Pieces.Single(p => p.SolvedPosition.Equals(new Position3D(0, 1, 0)));
+        var backCenter = cube.Pieces.Single(p => p.SolvedPosition.Equals(new Position3D(0, 0, -1)));
+        var downCenter = cube.Pieces.Single(p => p.SolvedPosition.Equals(new Position3D(0, -1, 0)));
+        
+        // After M move: Front→Down, Down→Back, Back→Up, Up→Front
+        Assert.Equal(new Position3D(0, -1, 0), frontCenter.Position);
+        Assert.Equal(new Position3D(0, 0, 1), upCenter.Position);
+        Assert.Equal(new Position3D(0, 1, 0), backCenter.Position);
+        Assert.Equal(new Position3D(0, 0, -1), downCenter.Position);
+        
+        // Reset for E move test
+        cube = Cube.CreateSolved();
+        cube.ApplyMove(new Move('E'));
+        
+        // E move rotates centers in the Y=0 plane (Front, Right, Back, Left)
+        // Following D rotation direction
+        var eFrontCenter = cube.Pieces.Single(p => p.SolvedPosition.Equals(new Position3D(0, 0, 1)));
+        var eRightCenter = cube.Pieces.Single(p => p.SolvedPosition.Equals(new Position3D(1, 0, 0)));
+        var eBackCenter = cube.Pieces.Single(p => p.SolvedPosition.Equals(new Position3D(0, 0, -1)));
+        var eLeftCenter = cube.Pieces.Single(p => p.SolvedPosition.Equals(new Position3D(-1, 0, 0)));
+        
+        // After E move: Front→Right, Right→Back, Back→Left, Left→Front
+        Assert.Equal(new Position3D(1, 0, 0), eFrontCenter.Position);
+        Assert.Equal(new Position3D(0, 0, -1), eRightCenter.Position);
+        Assert.Equal(new Position3D(-1, 0, 0), eBackCenter.Position);
+        Assert.Equal(new Position3D(0, 0, 1), eLeftCenter.Position);
     }
     
     [Fact]

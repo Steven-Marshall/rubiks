@@ -2,6 +2,7 @@ using RubiksCube.Core.Models;
 using RubiksCube.Core.Display;
 using RubiksCube.Core.Storage;
 using RubiksCube.Core.Algorithms;
+using RubiksCube.Core.Scrambling;
 using System.Text.Json;
 
 namespace RubiksCube.CLI;
@@ -28,6 +29,7 @@ class Program
                 "list" => HandleList(),
                 "delete" => HandleDelete(args),
                 "export" => HandleExport(args),
+                "scramble-gen" => HandleScrambleGen(args),
                 "help" or "--help" or "-h" => HandleHelp(),
                 _ => HandleUnknownCommand(command)
             };
@@ -316,6 +318,87 @@ class Program
         }
     }
 
+    private static int HandleScrambleGen(string[] args)
+    {
+        try
+        {
+            int moveCount = 25; // WCA default
+            int? seed = null;
+            
+            // Parse arguments
+            for (int i = 1; i < args.Length; i++)
+            {
+                if (args[i] == "--moves" || args[i] == "-m")
+                {
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out var count))
+                    {
+                        moveCount = count;
+                        i++; // Skip the value
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("Error: --moves requires a numeric value");
+                        return 1;
+                    }
+                }
+                else if (args[i].StartsWith("--moves="))
+                {
+                    if (int.TryParse(args[i].Substring("--moves=".Length), out var count))
+                    {
+                        moveCount = count;
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("Error: --moves requires a numeric value");
+                        return 1;
+                    }
+                }
+                else if (args[i] == "--seed" || args[i] == "-s")
+                {
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out var s))
+                    {
+                        seed = s;
+                        i++; // Skip the value
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("Error: --seed requires a numeric value");
+                        return 1;
+                    }
+                }
+                else if (args[i].StartsWith("--seed="))
+                {
+                    if (int.TryParse(args[i].Substring("--seed=".Length), out var s))
+                    {
+                        seed = s;
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("Error: --seed requires a numeric value");
+                        return 1;
+                    }
+                }
+            }
+
+            var generator = new ScrambleGenerator(seed);
+            var result = generator.GenerateScramble(moveCount);
+
+            if (result.IsFailure)
+            {
+                Console.Error.WriteLine($"Error generating scramble: {result.Error}");
+                return 1;
+            }
+
+            Console.WriteLine(result.Value.ToString());
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error generating scramble: {ex.Message}");
+            return 1;
+        }
+    }
+
     private static int HandleHelp()
     {
         ShowHelp();
@@ -331,7 +414,7 @@ class Program
 
     private static void ShowHelp()
     {
-        Console.WriteLine("RubiksCube v2.0 - A CLI tool for 3x3x3 Rubik's cube operations");
+        Console.WriteLine("RubiksCube v3.0 - A CLI tool for 3x3x3 Rubik's cube operations");
         Console.WriteLine();
         Console.WriteLine("Usage:");
         Console.WriteLine("  rubiks create [cube-name]                     Generate a solved cube state");
@@ -340,6 +423,7 @@ class Program
         Console.WriteLine("  rubiks list                                   List all saved cubes");
         Console.WriteLine("  rubiks delete cube-name                       Delete a saved cube");
         Console.WriteLine("  rubiks export cube-name                       Export cube JSON to stdout");
+        Console.WriteLine("  rubiks scramble-gen [--moves=n] [--seed=n]    Generate a WCA scramble algorithm");
         Console.WriteLine("  rubiks help                                   Show this help message");
         Console.WriteLine();
         Console.WriteLine("Examples:");
@@ -355,8 +439,14 @@ class Program
         Console.WriteLine("  rubiks create | rubiks apply \"y y'\" | rubiks display");
         Console.WriteLine("  rubiks create | rubiks display --format=ascii");
         Console.WriteLine();
+        Console.WriteLine("  # Scrambling workflow");
+        Console.WriteLine("  rubiks create | rubiks apply \"$(rubiks scramble-gen)\" | rubiks display");
+        Console.WriteLine("  rubiks scramble-gen --moves=30 --seed=42");
+        Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  --format, -f    Display format: ascii or unicode (default: unicode)");
+        Console.WriteLine("  --moves, -m     Number of moves in scramble (default: 25)");
+        Console.WriteLine("  --seed, -s      Random seed for reproducible scrambles");
         Console.WriteLine("  --help, -h      Show help information");
         Console.WriteLine();
         Console.WriteLine("Storage:");
