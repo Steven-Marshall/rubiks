@@ -3,6 +3,7 @@ using RubiksCube.Core.Display;
 using RubiksCube.Core.Storage;
 using RubiksCube.Core.Algorithms;
 using RubiksCube.Core.Scrambling;
+using RubiksCube.Core.PatternRecognition;
 using System.Text.Json;
 
 namespace RubiksCube.CLI;
@@ -30,6 +31,7 @@ class Program
                 "delete" => HandleDelete(args),
                 "export" => HandleExport(args),
                 "scramble-gen" => HandleScrambleGen(args),
+                "analyze" => await HandleAnalyze(args),
                 "help" or "--help" or "-h" => HandleHelp(),
                 _ => HandleUnknownCommand(command)
             };
@@ -399,6 +401,118 @@ class Program
         }
     }
 
+    private static async Task<int> HandleAnalyze(string[] args)
+    {
+        try
+        {
+            string? cubeName = null;
+            bool verbose = false;
+            bool json = false;
+            
+            // Parse arguments
+            for (int i = 1; i < args.Length; i++)
+            {
+                if (args[i] == "--verbose" || args[i] == "-v")
+                {
+                    verbose = true;
+                }
+                else if (args[i] == "--json" || args[i] == "-j")
+                {
+                    json = true;
+                }
+                else if (!args[i].StartsWith("-"))
+                {
+                    // Assume it's a cube name
+                    cubeName = args[i];
+                }
+            }
+
+            Cube cube;
+            
+            // Load cube from name or stdin
+            if (cubeName != null)
+            {
+                var loadResult = CubeStorageService.Load(cubeName);
+                if (loadResult.IsFailure)
+                {
+                    await Console.Error.WriteLineAsync($"Error loading cube: {loadResult.Error}");
+                    return 1;
+                }
+                cube = loadResult.Value;
+            }
+            else
+            {
+                // Read from stdin (for piping)
+                var cubeJson = await Console.In.ReadToEndAsync();
+                if (string.IsNullOrWhiteSpace(cubeJson))
+                {
+                    await Console.Error.WriteLineAsync("Error: No cube data provided via stdin");
+                    return 1;
+                }
+                cube = Cube.FromJson(cubeJson.Trim());
+            }
+
+            // Analyze the cube
+            var analyzer = new CubeStateAnalyzer();
+            var result = analyzer.Analyze(cube);
+
+            // Output result
+            if (json)
+            {
+                var jsonOutput = new
+                {
+                    recognition = new
+                    {
+                        stage = result.Recognition.Stage,
+                        complete = result.Recognition.IsComplete,
+                        progress = result.Recognition.Progress,
+                        total = result.Recognition.Total,
+                        description = result.Recognition.Description,
+                        details = result.Recognition.Details
+                    },
+                    suggestion = result.Suggestion != null ? new
+                    {
+                        algorithm = result.Suggestion.Algorithm,
+                        description = result.Suggestion.Description,
+                        next_stage = result.Suggestion.NextStage,
+                        details = result.Suggestion.Details
+                    } : null
+                };
+                
+                Console.WriteLine(JsonSerializer.Serialize(jsonOutput, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            else
+            {
+                // Human-readable output
+                Console.WriteLine(result.Recognition.Description);
+                
+                if (result.Suggestion != null)
+                {
+                    if (!string.IsNullOrEmpty(result.Suggestion.Algorithm))
+                    {
+                        Console.WriteLine($"Suggested: {result.Suggestion.Algorithm}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("No moves needed");
+                    }
+                    
+                    if (verbose && !string.IsNullOrEmpty(result.Suggestion.Description))
+                    {
+                        Console.WriteLine($"Description: {result.Suggestion.Description}");
+                    }
+                }
+            }
+            
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"Error analyzing cube: {ex.Message}");
+            return 1;
+        }
+    }
+
     private static int HandleHelp()
     {
         ShowHelp();
@@ -424,6 +538,7 @@ class Program
         Console.WriteLine("  rubiks delete cube-name                       Delete a saved cube");
         Console.WriteLine("  rubiks export cube-name                       Export cube JSON to stdout");
         Console.WriteLine("  rubiks scramble-gen [--moves=n] [--seed=n]    Generate a WCA scramble algorithm");
+        Console.WriteLine("  rubiks analyze [cube-name] [--json] [--verbose] Analyze cube state and suggest moves");
         Console.WriteLine("  rubiks help                                   Show this help message");
         Console.WriteLine();
         Console.WriteLine("Examples:");
@@ -443,10 +558,17 @@ class Program
         Console.WriteLine("  rubiks create | rubiks apply \"$(rubiks scramble-gen)\" | rubiks display");
         Console.WriteLine("  rubiks scramble-gen --moves=30 --seed=42");
         Console.WriteLine();
+        Console.WriteLine("  # Analysis workflow");
+        Console.WriteLine("  rubiks analyze testcube");
+        Console.WriteLine("  rubiks export testcube | rubiks analyze --json");
+        Console.WriteLine("  rubiks create | rubiks apply \"R U R'\" | rubiks analyze");
+        Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  --format, -f    Display format: ascii or unicode (default: unicode)");
         Console.WriteLine("  --moves, -m     Number of moves in scramble (default: 25)");
         Console.WriteLine("  --seed, -s      Random seed for reproducible scrambles");
+        Console.WriteLine("  --json, -j      JSON output format for analysis");
+        Console.WriteLine("  --verbose, -v   Verbose analysis output");
         Console.WriteLine("  --help, -h      Show help information");
         Console.WriteLine();
         Console.WriteLine("Storage:");
