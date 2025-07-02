@@ -4,6 +4,7 @@ using RubiksCube.Core.Storage;
 using RubiksCube.Core.Algorithms;
 using RubiksCube.Core.Scrambling;
 using RubiksCube.Core.PatternRecognition;
+using RubiksCube.Core.Solving;
 using System.Text.Json;
 
 namespace RubiksCube.CLI;
@@ -408,6 +409,7 @@ class Program
             string? cubeName = null;
             bool verbose = false;
             bool json = false;
+            bool allEdges = false;
             
             // Parse arguments
             for (int i = 1; i < args.Length; i++)
@@ -419,6 +421,10 @@ class Program
                 else if (args[i] == "--json" || args[i] == "-j")
                 {
                     json = true;
+                }
+                else if (args[i] == "--all-edges" || args[i] == "-a")
+                {
+                    allEdges = true;
                 }
                 else if (!args[i].StartsWith("-"))
                 {
@@ -450,6 +456,17 @@ class Program
                     return 1;
                 }
                 cube = Cube.FromJson(cubeJson.Trim());
+            }
+
+            // Check if we should show all cross edges analysis
+            if (allEdges)
+            {
+                var crossSolver = new CrossSolver(CubeColor.White);
+                var edgeAnalysis = crossSolver.AnalyzeAllCrossEdges(cube);
+                Console.WriteLine("Cross edge analysis for white cross:");
+                Console.WriteLine("=====================================");
+                Console.WriteLine(edgeAnalysis);
+                return 0;
             }
 
             // Analyze the cube

@@ -2,6 +2,7 @@ using Xunit;
 using RubiksCube.Core.Models;
 using RubiksCube.Core.Solving;
 using RubiksCube.Core.PatternRecognition.Models;
+using RubiksCube.Core.Algorithms;
 
 namespace RubiksCube.Tests.Solving;
 
@@ -32,21 +33,27 @@ public class CrossSolverTests
     }
 
     [Theory]
-    [InlineData(0, "Start building white cross")]
-    [InlineData(1, "Continue white cross - 1/4 edges placed")]
-    [InlineData(2, "Half cross complete - 2/4 edges placed")]
-    [InlineData(3, "Almost done - 3/4 edges placed")]
-    public void SuggestAlgorithm_PartialCross_ShouldProvideAlgorithm(int progress, string expectedDescription)
+    [InlineData("R", 3, "Final")]        // R move leaves 3/4 cross
+    [InlineData("L F R", 1, "Place")]    // L F R leaves 1/4 cross  
+    [InlineData("F", 3, "Final")]        // F move leaves 3/4 cross
+    [InlineData("L", 3, "Final")]        // L move leaves 3/4 cross
+    public void SuggestAlgorithm_PartialCross_ShouldProvideEdgeSpecificSuggestion(string scramble, int expectedProgress, string expectedDescriptionStart)
     {
-        // Arrange
+        // Arrange - Create cube with actual cross disruption
         var cube = Cube.CreateSolved();
+        var moves = scramble.Split(' ');
+        foreach (var moveStr in moves)
+        {
+            cube.ApplyMove(new Move(moveStr[0]));
+        }
+        
         var solver = new CrossSolver();
         var recognition = new RecognitionResult(
             stage: "cross",
             isComplete: false,
-            progress: progress,
+            progress: expectedProgress,
             total: 4,
-            description: $"White cross {progress}/4 complete"
+            description: $"White cross {expectedProgress}/4 complete"
         );
 
         // Act
@@ -55,7 +62,8 @@ public class CrossSolverTests
         // Assert
         Assert.NotNull(result);
         Assert.NotEmpty(result.Algorithm); // Should provide some moves
-        Assert.Contains(expectedDescription, result.Description);
+        Assert.Contains(expectedDescriptionStart, result.Description);
+        Assert.Contains("edge", result.Description.ToLowerInvariant());
         Assert.Equal("cross", result.NextStage); // Still working on cross
     }
 
