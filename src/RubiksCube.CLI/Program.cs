@@ -33,6 +33,7 @@ class Program
                 "export" => HandleExport(args),
                 "scramble-gen" => HandleScrambleGen(args),
                 "analyze" => await HandleAnalyze(args),
+                "solve" => await HandleSolve(args),
                 "help" or "--help" or "-h" => HandleHelp(),
                 _ => HandleUnknownCommand(command)
             };
@@ -462,7 +463,7 @@ class Program
             if (allEdges)
             {
                 var crossSolver = new CrossSolver(CubeColor.White);
-                var edgeAnalysis = crossSolver.AnalyzeAllCrossEdges(cube);
+                var edgeAnalysis = crossSolver.AnalyzeAllCrossEdges(cube, verbose);
                 Console.WriteLine("Cross edge analysis for white cross:");
                 Console.WriteLine("=====================================");
                 Console.WriteLine(edgeAnalysis);
@@ -528,6 +529,231 @@ class Program
             await Console.Error.WriteLineAsync($"Error analyzing cube: {ex.Message}");
             return 1;
         }
+    }
+
+    private static async Task<int> HandleSolve(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            await Console.Error.WriteLineAsync("Error: Solve stage required");
+            await Console.Error.WriteLineAsync("Usage: rubiks solve cross [cube-name] [--verbose]");
+            return 1;
+        }
+
+        string stage = args[1].ToLowerInvariant();
+        if (stage != "cross")
+        {
+            await Console.Error.WriteLineAsync($"Error: Unsupported solve stage '{stage}'. Only 'cross' is currently supported.");
+            return 1;
+        }
+
+        try
+        {
+            string? cubeName = null;
+            bool verbose = false;
+            
+            // Parse arguments
+            for (int i = 2; i < args.Length; i++)
+            {
+                if (args[i] == "--verbose" || args[i] == "-v")
+                {
+                    verbose = true;
+                }
+                else if (!args[i].StartsWith("-"))
+                {
+                    // Assume it's a cube name
+                    cubeName = args[i];
+                }
+            }
+
+            Cube cube;
+            
+            // Load cube from name or stdin
+            if (cubeName != null)
+            {
+                var loadResult = CubeStorageService.Load(cubeName);
+                if (loadResult.IsFailure)
+                {
+                    await Console.Error.WriteLineAsync($"Error loading cube: {loadResult.Error}");
+                    return 1;
+                }
+                cube = loadResult.Value;
+            }
+            else
+            {
+                // Read from stdin (for piping)
+                var cubeJson = await Console.In.ReadToEndAsync();
+                if (string.IsNullOrWhiteSpace(cubeJson))
+                {
+                    await Console.Error.WriteLineAsync("Error: No cube data provided via stdin");
+                    return 1;
+                }
+                cube = Cube.FromJson(cubeJson.Trim());
+            }
+
+            // Solve the white cross
+            var crossSolver = new CrossSolver(CubeColor.White);
+            var solution = SolveWhiteCross(cube, crossSolver, verbose);
+            
+            if (verbose)
+            {
+                Console.WriteLine(solution.VerboseOutput);
+            }
+            else
+            {
+                Console.WriteLine(solution.Algorithm);
+            }
+
+            // If named cube, save the solved state
+            if (cubeName != null)
+            {
+                var saveResult = CubeStorageService.Save(solution.FinalCube, cubeName);
+                if (saveResult.IsFailure)
+                {
+                    await Console.Error.WriteLineAsync($"Error saving cube: {saveResult.Error}");
+                    return 1;
+                }
+            }
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"Error solving cross: {ex.Message}");
+            return 1;
+        }
+    }
+
+    private static (string Algorithm, string VerboseOutput, Cube FinalCube) SolveWhiteCross(Cube cube, CrossSolver crossSolver, bool verbose)
+    {
+        var workingCube = cube.Clone();
+        var algorithmSteps = new List<string>();
+        var verboseLines = new List<string>();
+        
+        if (verbose)
+        {
+            verboseLines.Add("Solving white cross step by step...");
+            verboseLines.Add("");
+        }
+
+        int stepNumber = 1;
+        while (true)
+        {
+            // Analyze current state
+            var edgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+            var edgeAnalysis = new List<(CubeColor Color, string Algorithm, int MoveCount)>();
+            int solvedCount = 0;
+
+            foreach (var edgeColor in edgeColors)
+            {
+                var edge = FindCrossEdge(workingCube, CubeColor.White, edgeColor);
+                if (edge != null && edge.IsSolved)
+                {
+                    solvedCount++;
+                    continue;
+                }
+
+                var caseType = CrossEdgeClassifier.ClassifyEdgePosition(workingCube, CubeColor.White, edgeColor);
+                var preserveBottomLayer = CountSolvedCrossEdges(workingCube, CubeColor.White) > 0;
+                var algorithm = CrossEdgeAlgorithms.GetAlgorithm(caseType, workingCube, CubeColor.White, preserveBottomLayer, edgeColor);
+                
+                if (!string.IsNullOrEmpty(algorithm))
+                {
+                    var parsedAlgo = Algorithm.Parse(algorithm);
+                    int moveCount = parsedAlgo.IsSuccess ? parsedAlgo.Value.Length : 0;
+                    edgeAnalysis.Add((edgeColor, algorithm, moveCount));
+                }
+            }
+
+            // Check if cross is complete
+            if (solvedCount == 4)
+            {
+                if (verbose)
+                {
+                    if (stepNumber == 1)
+                    {
+                        verboseLines.Add("Cross already solved!");
+                    }
+                    else
+                    {
+                        verboseLines.Add($"White cross complete! Total moves: {algorithmSteps.Sum(a => Algorithm.Parse(a).IsSuccess ? Algorithm.Parse(a).Value.Length : 0)}");
+                        var fullAlgorithm = string.Join(" ", algorithmSteps);
+                        var compressedAlgorithm = AlgorithmCompressor.Compress(fullAlgorithm);
+                        verboseLines.Add($"Full algorithm: {compressedAlgorithm}");
+                    }
+                }
+                break;
+            }
+
+            // Find shortest algorithm
+            if (!edgeAnalysis.Any())
+            {
+                break; // No more edges to solve
+            }
+
+            var shortestEdge = edgeAnalysis.OrderBy(e => e.MoveCount).First();
+            
+            if (verbose)
+            {
+                var remainingCount = 4 - solvedCount;
+                verboseLines.Add($"Step {stepNumber}: white-{shortestEdge.Color.ToString().ToLowerInvariant()} ({shortestEdge.MoveCount} move{(shortestEdge.MoveCount == 1 ? "" : "s")}) -> {shortestEdge.Algorithm}");
+                verboseLines.Add($"Applied: {shortestEdge.Algorithm}");
+            }
+
+            // Apply the algorithm
+            var algorithmResult = Algorithm.Parse(shortestEdge.Algorithm);
+            if (algorithmResult.IsSuccess)
+            {
+                foreach (var move in algorithmResult.Value.Moves)
+                {
+                    workingCube.ApplyMove(move);
+                }
+                algorithmSteps.Add(shortestEdge.Algorithm);
+            }
+
+            if (verbose)
+            {
+                var newSolvedCount = CountSolvedCrossEdges(workingCube, CubeColor.White);
+                var remainingCount = 4 - newSolvedCount;
+                verboseLines.Add($"Status: {newSolvedCount}/4 edges solved{(remainingCount > 0 ? $" ({remainingCount} remaining)" : "")}");
+                verboseLines.Add("");
+            }
+
+            stepNumber++;
+        }
+
+        // Prepare final algorithm
+        var finalAlgorithm = "";
+        if (algorithmSteps.Any())
+        {
+            var fullAlgorithm = string.Join(" ", algorithmSteps);
+            finalAlgorithm = AlgorithmCompressor.Compress(fullAlgorithm);
+        }
+
+        return (finalAlgorithm, string.Join("\n", verboseLines), workingCube);
+    }
+
+    private static CubePiece? FindCrossEdge(Cube cube, CubeColor crossColor, CubeColor edgeColor)
+    {
+        return cube.Edges.FirstOrDefault(edge =>
+            edge.Colors.Contains(crossColor) && edge.Colors.Contains(edgeColor));
+    }
+
+    private static int CountSolvedCrossEdges(Cube cube, CubeColor crossColor)
+    {
+        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+        var solvedCount = 0;
+        
+        foreach (var edgeColor in crossEdgeColors)
+        {
+            var edge = FindCrossEdge(cube, crossColor, edgeColor);
+            if (edge != null && edge.IsSolved)
+            {
+                solvedCount++;
+            }
+        }
+        
+        return solvedCount;
     }
 
     private static int HandleHelp()

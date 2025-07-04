@@ -1,4 +1,7 @@
+using System.Linq;
+using System.Text;
 using RubiksCube.Core.Models;
+using RubiksCube.Core.Algorithms;
 
 namespace RubiksCube.Core.Solving;
 
@@ -14,24 +17,43 @@ public static class CrossEdgeAlgorithms
     /// <param name="caseType">The classified edge case</param>
     /// <param name="cube">Current cube state (for conditional restoration checking)</param>
     /// <param name="crossColor">Cross color being solved</param>
-    /// <param name="isFirstEdge">True if solving the first cross edge (enables optimizations)</param>
+    /// <param name="preserveBottomLayer">True if bottom layer edges should be preserved (uses U-layer algorithms)</param>
     /// <param name="edgeColor">Edge color for algorithm transformation</param>
     /// <returns>Algorithm string with conditionals resolved and transformed for edge perspective</returns>
-    public static string GetAlgorithm(CrossEdgeCase caseType, Cube? cube = null, CubeColor crossColor = CubeColor.White, bool isFirstEdge = false, CubeColor edgeColor = CubeColor.Green)
+    public static string GetAlgorithm(CrossEdgeCase caseType, Cube? cube = null, CubeColor crossColor = CubeColor.White, bool preserveBottomLayer = false, CubeColor edgeColor = CubeColor.Green)
     {
-        var rawAlgorithm = GetRawAlgorithm(caseType, isFirstEdge);
+        var rawAlgorithm = GetRawAlgorithm(caseType, preserveBottomLayer);
         
-        // Process conditional restoration brackets [...]
-        var processedAlgorithm = ProcessConditionalRestorations(rawAlgorithm, cube, crossColor);
+        // DEBUG: Uncomment to trace algorithm processing
+        // Console.Error.WriteLine($"[DEBUG] Raw: {rawAlgorithm}");
         
-        // Transform algorithm based on edge color perspective
-        return TransformAlgorithmForEdgeColor(processedAlgorithm, edgeColor);
+        // Transform algorithm based on edge color perspective (keeping brackets intact)
+        var transformedAlgorithm = TransformAlgorithmForEdgeColor(rawAlgorithm, edgeColor);
+        
+        // DEBUG: Uncomment to trace algorithm processing
+        // Console.Error.WriteLine($"[DEBUG] Transformed: {transformedAlgorithm}");
+        
+        // Process conditional restoration brackets [...] AFTER transformation
+        var finalAlgorithm = ProcessConditionalRestorations(transformedAlgorithm, cube, crossColor);
+        
+        // DEBUG: Uncomment to trace algorithm processing
+        // Console.Error.WriteLine($"[DEBUG] Final: {finalAlgorithm}");
+        
+        return finalAlgorithm;
+    }
+    
+    /// <summary>
+    /// Gets the raw algorithm for debugging purposes (without conditional processing)
+    /// </summary>
+    public static string GetRawAlgorithmForDebugging(CrossEdgeCase caseType)
+    {
+        return GetRawAlgorithm(caseType, preserveBottomLayer: false);
     }
     
     /// <summary>
     /// Gets the raw algorithm with conditional notation intact
     /// </summary>
-    private static string GetRawAlgorithm(CrossEdgeCase caseType, bool isFirstEdge)
+    private static string GetRawAlgorithm(CrossEdgeCase caseType, bool preserveBottomLayer)
     {
         return caseType switch
         {
@@ -39,17 +61,17 @@ public static class CrossEdgeAlgorithms
             CrossEdgeCase.BottomFrontAligned => "",                                    // Case 1a: Front position, aligned
             CrossEdgeCase.BottomFrontFlipped => "D R [D' restores bottom layer] F",   // Case 1b: Front position, flipped
             
-            // Case 1c: First edge optimization
-            CrossEdgeCase.BottomRightAligned => isFirstEdge ? "D'" : "R2 U F2",       // Case 1c: Right position, aligned
-            CrossEdgeCase.BottomRightFlipped => "R F",                                 // Case 1d: Right position, flipped
+            // Case 1c: Right position - use U-layer algorithm if preserving bottom
+            CrossEdgeCase.BottomRightAligned => preserveBottomLayer ? "R2 U F2" : "D'", // Case 1c: Right position, aligned
+            CrossEdgeCase.BottomRightFlipped => "R F",                                  // Case 1d: Right position, flipped
             
-            // Case 1e: First edge optimization  
-            CrossEdgeCase.BottomBackAligned => isFirstEdge ? "D2" : "B2 U2 F2",       // Case 1e: Back position, aligned
-            CrossEdgeCase.BottomBackFlipped => "D' R [D restores bottom layer] F",    // Case 1f: Back position, flipped
+            // Case 1e: Back position - use U-layer algorithm if preserving bottom
+            CrossEdgeCase.BottomBackAligned => preserveBottomLayer ? "B2 U2 F2" : "D2", // Case 1e: Back position, aligned
+            CrossEdgeCase.BottomBackFlipped => "D' R [D restores bottom layer] F",     // Case 1f: Back position, flipped
             
-            // Case 1g: First edge optimization
-            CrossEdgeCase.BottomLeftAligned => isFirstEdge ? "D" : "L2 U' F2",        // Case 1g: Left position, aligned
-            CrossEdgeCase.BottomLeftFlipped => "L' F'",                                // Case 1h: Left position, flipped
+            // Case 1g: Left position - use U-layer algorithm if preserving bottom
+            CrossEdgeCase.BottomLeftAligned => preserveBottomLayer ? "L2 U' F2" : "D",  // Case 1g: Left position, aligned
+            CrossEdgeCase.BottomLeftFlipped => "L' F'",                                 // Case 1h: Left position, flipped
             
             // Middle Layer Cases (Y = 0)
             CrossEdgeCase.MiddleFrontRightAligned => "F",                              // Case 2a: Front-right aligned
@@ -77,29 +99,183 @@ public static class CrossEdgeAlgorithms
     
     /// <summary>
     /// Processes conditional restoration notation [...]
-    /// For now: simple approach that includes all restoration moves
-    /// TODO: Implement smart conditional checking
+    /// Tries both with and without restoration moves, picks the one that preserves more edges
     /// </summary>
     private static string ProcessConditionalRestorations(string rawAlgorithm, Cube? cube, CubeColor crossColor)
     {
-        if (string.IsNullOrEmpty(rawAlgorithm))
+        if (string.IsNullOrEmpty(rawAlgorithm) || cube == null)
             return rawAlgorithm;
             
-        // TODO: Implement proper conditional logic
-        // For now: simple approach - strip brackets and include all moves
-        var processed = rawAlgorithm;
+        // Check if algorithm has any conditional restorations
+        if (!rawAlgorithm.Contains("["))
+            return rawAlgorithm;
         
-        // Remove bracket notation but keep the moves
+        // Extract two versions: with and without restoration moves
+        var withRestoration = ExtractWithRestoration(rawAlgorithm);
+        var withoutRestoration = ExtractWithoutRestoration(rawAlgorithm);
+        
+        // If they're the same, no choice to make
+        if (withRestoration == withoutRestoration)
+            return withRestoration;
+        
+        // Try both and see which preserves more cross edges
+        var edgesBeforeSolve = CountSolvedCrossEdges(cube, crossColor);
+        
+        // Try with restoration
+        var cubeWithRestoration = cube.Clone();
+        var algo1 = Algorithm.Parse(withRestoration);
+        if (algo1.IsSuccess)
+        {
+            foreach (var move in algo1.Value.Moves)
+            {
+                cubeWithRestoration.ApplyMove(move);
+            }
+        }
+        var edgesWithRestoration = CountSolvedCrossEdges(cubeWithRestoration, crossColor);
+        
+        // Try without restoration
+        var cubeWithoutRestoration = cube.Clone();
+        var algo2 = Algorithm.Parse(withoutRestoration);
+        if (algo2.IsSuccess)
+        {
+            foreach (var move in algo2.Value.Moves)
+            {
+                cubeWithoutRestoration.ApplyMove(move);
+            }
+        }
+        var edgesWithoutRestoration = CountSolvedCrossEdges(cubeWithoutRestoration, crossColor);
+        
+        // Pick the better option
+        if (edgesWithRestoration > edgesWithoutRestoration)
+        {
+            // DEBUG: Uncomment to see restoration decisions
+            // Console.Error.WriteLine($"[DEBUG] Choosing WITH restoration: {edgesWithRestoration} edges vs {edgesWithoutRestoration}");
+            return withRestoration;
+        }
+        else if (edgesWithoutRestoration > edgesWithRestoration)
+        {
+            // DEBUG: Uncomment to see restoration decisions
+            // Console.Error.WriteLine($"[DEBUG] Choosing WITHOUT restoration: {edgesWithoutRestoration} edges vs {edgesWithRestoration}");
+            return withoutRestoration;
+        }
+        else
+        {
+            // Tied - pick the shorter algorithm
+            var movesWithRestoration = withRestoration.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+            var movesWithoutRestoration = withoutRestoration.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+            
+            // DEBUG: Uncomment to see restoration decisions
+            // Console.Error.WriteLine($"[DEBUG] Tied at {edgesWithRestoration} edges - choosing shorter: {(movesWithoutRestoration <= movesWithRestoration ? "without" : "with")} restoration");
+            
+            return movesWithoutRestoration <= movesWithRestoration ? withoutRestoration : withRestoration;
+        }
+    }
+    
+    /// <summary>
+    /// Extracts algorithm with restoration moves (removes brackets but keeps moves)
+    /// </summary>
+    private static string ExtractWithRestoration(string rawAlgorithm)
+    {
         // Pattern: [move restores position] -> just move
-        processed = System.Text.RegularExpressions.Regex.Replace(
-            processed, 
+        var processed = System.Text.RegularExpressions.Regex.Replace(
+            rawAlgorithm, 
             @"\[([^]]+) restores [^]]+\]", 
             "$1");
         
         // Clean up extra spaces
-        processed = System.Text.RegularExpressions.Regex.Replace(processed, @"\s+", " ").Trim();
+        return System.Text.RegularExpressions.Regex.Replace(processed, @"\s+", " ").Trim();
+    }
+    
+    /// <summary>
+    /// Extracts algorithm without restoration moves (removes entire bracket contents)
+    /// </summary>
+    private static string ExtractWithoutRestoration(string rawAlgorithm)
+    {
+        // Pattern: [anything] -> remove entirely
+        var processed = System.Text.RegularExpressions.Regex.Replace(
+            rawAlgorithm, 
+            @"\[[^]]+\]", 
+            "");
         
-        return processed;
+        // Clean up extra spaces
+        return System.Text.RegularExpressions.Regex.Replace(processed, @"\s+", " ").Trim();
+    }
+    
+    /// <summary>
+    /// Find a specific cross edge by its two colors
+    /// </summary>
+    private static CubePiece? FindCrossEdge(Cube cube, CubeColor crossColor, CubeColor edgeColor)
+    {
+        return cube.Edges.FirstOrDefault(edge =>
+            edge.Colors.Contains(crossColor) && edge.Colors.Contains(edgeColor));
+    }
+    
+    /// <summary>
+    /// Counts how many cross edges are solved (in correct position with cross color on bottom)
+    /// </summary>
+    private static int CountSolvedCrossEdges(Cube cube, CubeColor crossColor)
+    {
+        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+        var solvedCount = 0;
+        
+        foreach (var edgeColor in crossEdgeColors)
+        {
+            var edge = FindCrossEdge(cube, crossColor, edgeColor);
+            if (edge != null && IsEdgeSolved(edge, crossColor, edgeColor))
+            {
+                solvedCount++;
+            }
+        }
+        
+        return solvedCount;
+    }
+    
+    /// <summary>
+    /// Checks if a cross edge is in its solved position
+    /// </summary>
+    private static bool IsEdgeSolved(CubePiece edge, CubeColor crossColor, CubeColor edgeColor)
+    {
+        // Edge is solved if:
+        // 1. It's on the bottom layer (Y = -1)
+        // 2. Cross color (white) is facing down
+        // 3. It's in the correct position relative to its center
+        
+        if (edge.Position.Y != -1)
+            return false;
+        
+        // Check if it's in the correct position relative to center
+        var expectedPosition = GetExpectedCrossEdgePosition(edgeColor);
+        if (!edge.Position.Equals(expectedPosition))
+            return false;
+        
+        // Check if cross color is facing down
+        // For an edge on the bottom layer, the cross color should be in the Y slot (index 1)
+        // and should match the expected color for that position
+        if (edge.Colors[1] != crossColor)
+            return false;
+        
+        // Also verify the edge color is facing its correct direction
+        // Based on the position, we can determine which index should have the edge color
+        var edgeColorIndex = edge.Position.Z != 0 ? 2 : 0; // Front/Back use Z index, Left/Right use X index
+        if (edge.Colors[edgeColorIndex] != edgeColor)
+            return false;
+        
+        return true;
+    }
+    
+    /// <summary>
+    /// Gets the expected position for a cross edge based on its non-cross color
+    /// </summary>
+    private static Position3D GetExpectedCrossEdgePosition(CubeColor edgeColor)
+    {
+        return edgeColor switch
+        {
+            CubeColor.Green => new Position3D(0, -1, 1),   // Front edge
+            CubeColor.Orange => new Position3D(1, -1, 0),  // Right edge
+            CubeColor.Blue => new Position3D(0, -1, -1),   // Back edge
+            CubeColor.Red => new Position3D(-1, -1, 0),    // Left edge
+            _ => throw new ArgumentException($"Invalid edge color for cross: {edgeColor}")
+        };
     }
     
     /// <summary>
@@ -112,16 +288,87 @@ public static class CrossEdgeAlgorithms
             return algorithm; // No transformation needed for canonical green
         }
         
-        // Split algorithm into individual moves
-        var moves = algorithm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var transformedMoves = new List<string>();
+        // Handle algorithms with conditional restoration brackets
+        // Pattern: "move1 move2 [restoration_move restores position] move3"
         
-        foreach (var move in moves)
+        var result = new StringBuilder();
+        var tokens = algorithm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        bool inBracket = false;
+        
+        foreach (var token in tokens)
         {
-            transformedMoves.Add(TransformMove(move, edgeColor));
+            if (token.StartsWith("["))
+            {
+                inBracket = true;
+                if (result.Length > 0) result.Append(" ");
+                
+                // Handle bracket token that may contain a move
+                if (token.Length > 1)
+                {
+                    // Extract move from [R or [R] format
+                    var moveStart = 1; // Skip the [
+                    var moveEnd = token.IndexOf(' ', moveStart);
+                    if (moveEnd == -1) moveEnd = token.IndexOf(']', moveStart);
+                    if (moveEnd == -1) moveEnd = token.Length;
+                    
+                    var moveContent = token.Substring(moveStart, moveEnd - moveStart);
+                    if (IsMoveToken(moveContent))
+                    {
+                        // Transform the move and reconstruct
+                        var transformedMove = TransformMove(moveContent, edgeColor);
+                        result.Append("[").Append(transformedMove).Append(token.Substring(moveEnd));
+                    }
+                    else
+                    {
+                        result.Append(token);
+                    }
+                }
+                else
+                {
+                    result.Append(token);
+                }
+                
+                if (token.EndsWith("]"))
+                {
+                    inBracket = false;
+                }
+            }
+            else if (inBracket)
+            {
+                // Inside brackets - transform moves but preserve other text
+                if (IsMoveToken(token))
+                {
+                    result.Append(" ").Append(TransformMove(token, edgeColor));
+                }
+                else
+                {
+                    result.Append(" ").Append(token);
+                }
+                
+                if (token.EndsWith("]"))
+                {
+                    inBracket = false;
+                }
+            }
+            else
+            {
+                // Outside brackets - transform as normal move
+                if (result.Length > 0) result.Append(" ");
+                result.Append(TransformMove(token, edgeColor));
+            }
         }
         
-        return string.Join(" ", transformedMoves);
+        return result.ToString();
+    }
+    
+    /// <summary>
+    /// Checks if a token looks like a move (starts with face letter)
+    /// </summary>
+    private static bool IsMoveToken(string token)
+    {
+        if (string.IsNullOrEmpty(token)) return false;
+        var firstChar = token[0];
+        return "RLUDFBMESXYZ".Contains(char.ToUpper(firstChar));
     }
     
     /// <summary>
@@ -211,31 +458,5 @@ public static class CrossEdgeAlgorithms
             'y' => 'y', // Y rotation doesn't change
             _ => moveChar // Unknown moves pass through unchanged
         };
-    }
-    
-    /// <summary>
-    /// TODO: Smart conditional restoration checking
-    /// Checks if a position contains a solved cross edge that would be displaced
-    /// </summary>
-    private static bool NeedsRestoration(Cube cube, Position3D position, CubeColor crossColor)
-    {
-        // TODO: Implement proper checking logic
-        // Check if there's a solved cross edge at this position
-        // Return true if restoration move is needed
-        
-        throw new NotImplementedException("Smart conditional restoration not yet implemented");
-    }
-    
-    /// <summary>
-    /// TODO: Parse position references from restoration notation
-    /// Extracts position coordinates from strings like "(1,-1,0)" or "bottom layer"
-    /// </summary>
-    private static Position3D ParsePositionReference(string positionRef)
-    {
-        // TODO: Parse position references like:
-        // "(1,-1,0)" -> Position3D(1, -1, 0)
-        // "bottom layer" -> analyze which position
-        
-        throw new NotImplementedException("Position reference parsing not yet implemented");
     }
 }

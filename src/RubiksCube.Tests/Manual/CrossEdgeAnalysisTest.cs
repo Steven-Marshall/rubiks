@@ -2,6 +2,7 @@ using Xunit;
 using RubiksCube.Core.Models;
 using RubiksCube.Core.Solving;
 using RubiksCube.Core.Storage;
+using RubiksCube.Core.Algorithms;
 
 namespace RubiksCube.Tests.Manual;
 
@@ -42,6 +43,50 @@ public class CrossEdgeAnalysisTest
             {
                 Assert.True(false, $"{crossColor}-{edgeColor} edge: ERROR - {ex.Message}");
             }
+        }
+    }
+
+    [Fact]
+    public void TestFirstEdgeOptimization()
+    {
+        // Create a solved cube
+        var cube = Cube.CreateSolved();
+        
+        // Apply scramble: F D2 R2 U D2 R2 U R2 D2 F2
+        var scrambleResult = Algorithm.Parse("F D2 R2 U D2 R2 U R2 D2 F2");
+        Assert.True(scrambleResult.IsSuccess, "Failed to parse scramble");
+        
+        foreach (var move in scrambleResult.Value.Moves)
+        {
+            cube.ApplyMove(move);
+        }
+
+        // Apply D' move
+        var dPrimeResult = Algorithm.Parse("D'");
+        Assert.True(dPrimeResult.IsSuccess, "Failed to parse D'");
+        
+        foreach (var move in dPrimeResult.Value.Moves)
+        {
+            cube.ApplyMove(move);
+        }
+
+        // Create cross solver and analyze
+        var crossSolver = new CrossSolver(CubeColor.White);
+        var analysis = crossSolver.AnalyzeAllCrossEdges(cube, verbose: true);
+        
+        // Output the analysis
+        Console.WriteLine($"Analysis after scramble + D':\n{analysis}");
+        
+        // Also test specific edges to verify first edge optimization
+        var edgeColors = new[] { CubeColor.Blue, CubeColor.Red };
+        
+        foreach (var edgeColor in edgeColors)
+        {
+            var caseType = CrossEdgeClassifier.ClassifyEdgePosition(cube, CubeColor.White, edgeColor);
+            var isFirstEdge = crossSolver.IsFirstEdge(cube, edgeColor);
+            var algorithm = CrossEdgeAlgorithms.GetAlgorithm(caseType, cube, CubeColor.White, isFirstEdge, edgeColor);
+            
+            Console.WriteLine($"white-{edgeColor}: {caseType}, isFirstEdge={isFirstEdge}, algorithm='{algorithm}'");
         }
     }
 }

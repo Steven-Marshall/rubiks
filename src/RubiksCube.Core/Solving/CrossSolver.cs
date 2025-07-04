@@ -92,17 +92,18 @@ public class CrossSolver : ISolver
             // Step 1: Classify the edge position and orientation
             var caseType = CrossEdgeClassifier.ClassifyEdgePosition(cube, CrossColor, edgeColor);
             
-            // Step 2: Check if this is the first edge (enables optimizations)
-            var isFirstEdge = IsFirstEdge(cube, edgeColor);
+            // Step 2: Check if we need to preserve bottom layer edges
+            var solvedCount = CountSolvedCrossEdges(cube, CrossColor);
+            var preserveBottomLayer = solvedCount > 0;
             
             // Step 3: Get algorithm for this case
-            var algorithm = CrossEdgeAlgorithms.GetAlgorithm(caseType, cube, CrossColor, isFirstEdge, edgeColor);
+            var algorithm = CrossEdgeAlgorithms.GetAlgorithm(caseType, cube, CrossColor, preserveBottomLayer, edgeColor);
             
             // Step 4: Compress algorithm to remove redundant moves
             var compressedAlgorithm = string.IsNullOrEmpty(algorithm) ? "" : AlgorithmCompressor.Compress(algorithm);
             
             // Step 5: Create description
-            var description = CreateDescription(edgeColor, caseType, isFirstEdge);
+            var description = CreateDescription(edgeColor, caseType, preserveBottomLayer);
             
             return new SuggestionResult(
                 algorithm: compressedAlgorithm,
@@ -120,7 +121,7 @@ public class CrossSolver : ISolver
     /// <summary>
     /// Check if this is the first cross edge being solved (enables D-move optimizations)
     /// </summary>
-    private bool IsFirstEdge(Cube cube, CubeColor currentEdgeColor)
+    public bool IsFirstEdge(Cube cube, CubeColor currentEdgeColor)
     {
         var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
         
@@ -144,7 +145,7 @@ public class CrossSolver : ISolver
     /// <summary>
     /// Create human-readable description for the solution
     /// </summary>
-    private string CreateDescription(CubeColor edgeColor, CrossEdgeCase caseType, bool isFirstEdge)
+    private string CreateDescription(CubeColor edgeColor, CrossEdgeCase caseType, bool preserveBottomLayer)
     {
         var edgeName = $"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}";
         var baseDescription = $"Place {edgeName} edge";
@@ -156,9 +157,9 @@ public class CrossSolver : ISolver
         
         // Verbose mode: include case information
         var caseDescription = GetCaseDescription(caseType);
-        var optimization = isFirstEdge ? " (first edge optimization)" : "";
+        var preservation = preserveBottomLayer ? " (preserving bottom layer)" : "";
         
-        return $"{baseDescription} - {caseDescription}{optimization}";
+        return $"{baseDescription} - {caseDescription}{preservation}";
     }
     
     /// <summary>
@@ -220,9 +221,29 @@ public class CrossSolver : ISolver
     }
     
     /// <summary>
+    /// Count how many cross edges are already solved
+    /// </summary>
+    private int CountSolvedCrossEdges(Cube cube, CubeColor crossColor)
+    {
+        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+        var solvedCount = 0;
+        
+        foreach (var edgeColor in crossEdgeColors)
+        {
+            var edge = FindCrossEdge(cube, crossColor, edgeColor);
+            if (edge != null && edge.IsSolved)
+            {
+                solvedCount++;
+            }
+        }
+        
+        return solvedCount;
+    }
+    
+    /// <summary>
     /// Debug method to analyze all 4 cross edges
     /// </summary>
-    public string AnalyzeAllCrossEdges(Cube cube)
+    public string AnalyzeAllCrossEdges(Cube cube, bool verbose = false)
     {
         var results = new List<string>();
         var edgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
@@ -231,11 +252,48 @@ public class CrossSolver : ISolver
         {
             try
             {
+                // Find the actual edge position
+                var edge = FindCrossEdge(cube, CrossColor, edgeColor);
+                if (edge == null)
+                {
+                    results.Add($"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}: NOT FOUND");
+                    continue;
+                }
+                
+                // Get the classification (from edge color's perspective)
                 var caseType = CrossEdgeClassifier.ClassifyEdgePosition(cube, CrossColor, edgeColor);
-                var algorithm = CrossEdgeAlgorithms.GetAlgorithm(caseType, cube, CrossColor, isFirstEdge: true, edgeColor);
+                var solvedCount = CountSolvedCrossEdges(cube, CrossColor);
+                var preserveBottomLayer = solvedCount > 0;
+                var baseAlgorithm = CrossEdgeAlgorithms.GetRawAlgorithmForDebugging(caseType);
+                var algorithm = CrossEdgeAlgorithms.GetAlgorithm(caseType, cube, CrossColor, preserveBottomLayer, edgeColor);
                 var algorithmText = string.IsNullOrEmpty(algorithm) ? "None needed" : algorithm;
                 
-                results.Add($"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}: {caseType} -> {algorithmText}");
+                // Calculate move count
+                int moveCount = 0;
+                if (!string.IsNullOrEmpty(algorithm))
+                {
+                    var parsedAlgo = Algorithm.Parse(algorithm);
+                    if (parsedAlgo.IsSuccess)
+                    {
+                        moveCount = parsedAlgo.Value.Length;
+                    }
+                }
+                
+                // Describe actual position in human-readable form
+                var actualPosition = DescribeEdgePosition(edge);
+                
+                if (verbose)
+                {
+                    // Verbose mode: show canonical position, face view classification, preserve info, and algorithm transformation
+                    var moveInfo = moveCount > 0 ? $" ({moveCount} move{(moveCount == 1 ? "" : "s")})" : "";
+                    var preserveInfo = preserveBottomLayer ? $" [Preserve: Yes ({solvedCount} solved)]" : " [Preserve: No]";
+                    results.Add($"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}: Canonical {actualPosition} (Face view {caseType}){preserveInfo} -> Base: \"{baseAlgorithm}\" -> Final: {algorithmText}{moveInfo}");
+                }
+                else
+                {
+                    // Basic mode: just show canonical position
+                    results.Add($"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}: {actualPosition} -> {algorithmText}");
+                }
             }
             catch (Exception ex)
             {
@@ -244,5 +302,67 @@ public class CrossSolver : ISolver
         }
         
         return string.Join("\n", results);
+    }
+    
+    /// <summary>
+    /// Describes an edge's position in human-readable form from canonical (green front) perspective
+    /// </summary>
+    private string DescribeEdgePosition(CubePiece edge)
+    {
+        var pos = edge.Position;
+        var description = "";
+        
+        // Determine layer
+        if (pos.Y == 1)
+            description = "top-";
+        else if (pos.Y == -1)
+            description = "bottom-";
+        else
+            description = "middle-";
+        
+        // Determine position within layer
+        if (pos.Y == 0)
+        {
+            // Middle layer edges
+            if (pos.X == 1 && pos.Z == 1) description += "front-right";
+            else if (pos.X == 1 && pos.Z == -1) description += "back-right";
+            else if (pos.X == -1 && pos.Z == -1) description += "back-left";
+            else if (pos.X == -1 && pos.Z == 1) description += "front-left";
+        }
+        else
+        {
+            // Top/Bottom layer edges
+            if (pos.Z == 1) description += "front";
+            else if (pos.Z == -1) description += "back";
+            else if (pos.X == 1) description += "right";
+            else if (pos.X == -1) description += "left";
+        }
+        
+        // Check orientation for cross edges
+        if (edge.Colors.Contains(CrossColor))
+        {
+            var crossColorIndex = Array.IndexOf(edge.Colors, CrossColor);
+            bool isAligned = false;
+            
+            // For bottom layer, white should be facing down (Y index)
+            if (pos.Y == -1 && crossColorIndex == 1)
+                isAligned = true;
+            // For top layer, white should be facing up (Y index)  
+            else if (pos.Y == 1 && crossColorIndex == 1)
+                isAligned = true;
+            // For middle layer, orientation depends on position
+            else if (pos.Y == 0)
+            {
+                // Check if cross color is on the correct face
+                if ((pos.X != 0 && crossColorIndex == 0) || (pos.Z != 0 && crossColorIndex == 2))
+                    isAligned = false; // Cross color is on side
+                else
+                    isAligned = true; // Cross color is on top/bottom
+            }
+            
+            description += isAligned ? " (aligned)" : " (flipped)";
+        }
+        
+        return description;
     }
 }

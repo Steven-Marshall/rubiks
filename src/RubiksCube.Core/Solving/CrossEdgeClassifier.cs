@@ -23,6 +23,12 @@ public static class CrossEdgeClassifier
             throw new InvalidOperationException($"Edge with colors {crossColor} and {edgeColor} not found");
         }
         
+        // DEBUG: Track what we're finding
+        // if (edgeColor == CubeColor.Blue)
+        // {
+        //     Console.Error.WriteLine($"[DEBUG] {crossColor}-{edgeColor}: Found at canonical {edge.Position}, colors: [{string.Join(",", edge.Colors)}]");
+        // }
+        
         // Transform both position and colors to be viewed from the edge color's perspective
         var transformedPosition = TransformPositionForEdgeColor(edge.Position, edgeColor);
         var transformedColors = TransformColorsForEdgeColor(edge.Colors, edgeColor);
@@ -36,7 +42,49 @@ public static class CrossEdgeClassifier
         // Classify based on transformed position (always relative to canonical front)
         var targetPosition = new Position3D(0, -1, 1); // Always canonical front
         
-        return ClassifyEdge(transformedEdge, targetPosition, crossColor, edgeColor);
+        // if (edgeColor == CubeColor.Blue)
+        // {
+        //     Console.Error.WriteLine($"[DEBUG] {crossColor}-{edgeColor}: After transformation: position {transformedPosition}, colors [{string.Join(",", transformedColors)}]");
+        // }
+        
+        var result = ClassifyEdge(transformedEdge, targetPosition, crossColor, edgeColor);
+        
+        // if (edgeColor == CubeColor.Blue)
+        // {
+        //     Console.Error.WriteLine($"[DEBUG] {crossColor}-{edgeColor}: Final classification: {result}");
+        // }
+        
+        return result;
+    }
+    
+    /// <summary>
+    /// Gets the target position for a given edge color in the bottom layer
+    /// </summary>
+    private static Position3D GetTargetPositionForEdgeColor(CubeColor edgeColor)
+    {
+        return edgeColor switch
+        {
+            CubeColor.Green => new Position3D(0, -1, 1),   // Bottom-front
+            CubeColor.Orange => new Position3D(1, -1, 0),  // Bottom-right
+            CubeColor.Blue => new Position3D(0, -1, -1),   // Bottom-back
+            CubeColor.Red => new Position3D(-1, -1, 0),    // Bottom-left
+            _ => throw new ArgumentException($"Invalid edge color: {edgeColor}")
+        };
+    }
+    
+    /// <summary>
+    /// Gets the correct case for an edge that is in its target position
+    /// </summary>
+    private static CrossEdgeCase GetCorrectPositionCase(CubeColor edgeColor, bool isCorrectlyOriented)
+    {
+        return edgeColor switch
+        {
+            CubeColor.Green => isCorrectlyOriented ? CrossEdgeCase.BottomFrontAligned : CrossEdgeCase.BottomFrontFlipped,
+            CubeColor.Orange => isCorrectlyOriented ? CrossEdgeCase.BottomRightAligned : CrossEdgeCase.BottomRightFlipped,
+            CubeColor.Blue => isCorrectlyOriented ? CrossEdgeCase.BottomBackAligned : CrossEdgeCase.BottomBackFlipped,
+            CubeColor.Red => isCorrectlyOriented ? CrossEdgeCase.BottomLeftAligned : CrossEdgeCase.BottomLeftFlipped,
+            _ => throw new ArgumentException($"Invalid edge color: {edgeColor}")
+        };
     }
     
     /// <summary>
