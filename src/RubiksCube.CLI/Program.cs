@@ -4,6 +4,7 @@ using RubiksCube.Core.Storage;
 using RubiksCube.Core.Algorithms;
 using RubiksCube.Core.Scrambling;
 using RubiksCube.Core.PatternRecognition;
+using RubiksCube.Core.PatternRecognition.Models;
 using RubiksCube.Core.Solving;
 using System.Text.Json;
 
@@ -536,7 +537,7 @@ class Program
         if (args.Length < 2)
         {
             await Console.Error.WriteLineAsync("Error: Solve stage required");
-            await Console.Error.WriteLineAsync("Usage: rubiks solve cross [cube-name] [--verbose]");
+            await Console.Error.WriteLineAsync("Usage: rubiks solve cross [cube-name] [--verbose] [--level=pattern|superhuman]");
             return 1;
         }
 
@@ -551,6 +552,7 @@ class Program
         {
             string? cubeName = null;
             bool verbose = false;
+            string level = "pattern"; // Default to pattern-based solving
             
             // Parse arguments
             for (int i = 2; i < args.Length; i++)
@@ -559,11 +561,35 @@ class Program
                 {
                     verbose = true;
                 }
+                else if (args[i] == "--level" || args[i] == "-l")
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        level = args[i + 1].ToLowerInvariant();
+                        i++; // Skip the level value
+                    }
+                    else
+                    {
+                        await Console.Error.WriteLineAsync("Error: --level requires a value (pattern or superhuman)");
+                        return 1;
+                    }
+                }
+                else if (args[i].StartsWith("--level="))
+                {
+                    level = args[i].Substring("--level=".Length).ToLowerInvariant();
+                }
                 else if (!args[i].StartsWith("-"))
                 {
                     // Assume it's a cube name
                     cubeName = args[i];
                 }
+            }
+
+            // Validate level parameter
+            if (level != "pattern" && level != "superhuman")
+            {
+                await Console.Error.WriteLineAsync($"Error: Unsupported level '{level}'. Use 'pattern' or 'superhuman'.");
+                return 1;
             }
 
             Cube cube;
@@ -591,23 +617,76 @@ class Program
                 cube = Cube.FromJson(cubeJson.Trim());
             }
 
-            // Solve the white cross
-            var crossSolver = new CrossSolver(CubeColor.White);
-            var solution = SolveWhiteCross(cube, crossSolver, verbose);
+            // Choose solver based on level
+            string algorithm;
+            string verboseOutput;
+            Cube finalCube;
             
-            if (verbose)
+            if (level == "superhuman")
             {
-                Console.WriteLine(solution.VerboseOutput);
+                var superhumanSolver = new SuperhumanCrossSolver(CubeColor.White);
+                superhumanSolver.Verbose = verbose;
+                
+                // Create a fake recognition for the superhuman solver
+                var crossProgress = CountSolvedCrossEdges(cube, CubeColor.White);
+                var recognition = new RecognitionResult(
+                    stage: "cross",
+                    isComplete: crossProgress == 4,
+                    progress: crossProgress,
+                    total: 4,
+                    description: $"Cross progress: {crossProgress}/4 edges"
+                );
+                
+                var suggestion = superhumanSolver.SuggestAlgorithm(cube, recognition);
+                if (suggestion != null)
+                {
+                    algorithm = suggestion.Algorithm;
+                    verboseOutput = suggestion.Description;
+                    
+                    // Apply algorithm to get final cube state
+                    finalCube = cube.Clone();
+                    if (!string.IsNullOrEmpty(algorithm))
+                    {
+                        var algorithmResult = Algorithm.Parse(algorithm);
+                        if (algorithmResult.IsSuccess)
+                        {
+                            foreach (var move in algorithmResult.Value.Moves)
+                            {
+                                finalCube.ApplyMove(move);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    algorithm = "";
+                    verboseOutput = "No superhuman solution found";
+                    finalCube = cube;
+                }
             }
             else
             {
-                Console.WriteLine(solution.Algorithm);
+                // Use standard pattern-based solver
+                var crossSolver = new CrossSolver(CubeColor.White);
+                var solution = SolveWhiteCross(cube, crossSolver, verbose);
+                algorithm = solution.Algorithm;
+                verboseOutput = solution.VerboseOutput;
+                finalCube = solution.FinalCube;
+            }
+            
+            if (verbose)
+            {
+                Console.WriteLine(verboseOutput);
+            }
+            else
+            {
+                Console.WriteLine(algorithm);
             }
 
             // If named cube, save the solved state
             if (cubeName != null)
             {
-                var saveResult = CubeStorageService.Save(solution.FinalCube, cubeName);
+                var saveResult = CubeStorageService.Save(finalCube, cubeName);
                 if (saveResult.IsFailure)
                 {
                     await Console.Error.WriteLineAsync($"Error saving cube: {saveResult.Error}");
@@ -781,6 +860,7 @@ class Program
         Console.WriteLine("  rubiks delete cube-name                       Delete a saved cube");
         Console.WriteLine("  rubiks export cube-name                       Export cube JSON to stdout");
         Console.WriteLine("  rubiks scramble-gen [--moves=n] [--seed=n]    Generate a WCA scramble algorithm");
+        Console.WriteLine("  rubiks solve cross [cube-name] [--verbose] [--level=pattern|superhuman] Solve white cross");
         Console.WriteLine("  rubiks analyze [cube-name] [--json] [--verbose] Analyze cube state and suggest moves");
         Console.WriteLine("  rubiks help                                   Show this help message");
         Console.WriteLine();
@@ -806,12 +886,18 @@ class Program
         Console.WriteLine("  rubiks export testcube | rubiks analyze --json");
         Console.WriteLine("  rubiks create | rubiks apply \"R U R'\" | rubiks analyze");
         Console.WriteLine();
+        Console.WriteLine("  # Solving workflow");
+        Console.WriteLine("  rubiks solve cross testcube --verbose");
+        Console.WriteLine("  rubiks solve cross testcube --level=superhuman");
+        Console.WriteLine("  rubiks create | rubiks apply \"$(rubiks scramble-gen)\" | rubiks solve cross");
+        Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  --format, -f    Display format: ascii or unicode (default: unicode)");
         Console.WriteLine("  --moves, -m     Number of moves in scramble (default: 25)");
         Console.WriteLine("  --seed, -s      Random seed for reproducible scrambles");
         Console.WriteLine("  --json, -j      JSON output format for analysis");
         Console.WriteLine("  --verbose, -v   Verbose analysis output");
+        Console.WriteLine("  --level, -l     Solving level: pattern (default) or superhuman");
         Console.WriteLine("  --help, -h      Show help information");
         Console.WriteLine();
         Console.WriteLine("Storage:");

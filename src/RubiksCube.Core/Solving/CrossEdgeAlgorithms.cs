@@ -103,8 +103,12 @@ public static class CrossEdgeAlgorithms
     /// </summary>
     private static string ProcessConditionalRestorations(string rawAlgorithm, Cube? cube, CubeColor crossColor)
     {
-        if (string.IsNullOrEmpty(rawAlgorithm) || cube == null)
+        if (string.IsNullOrEmpty(rawAlgorithm))
             return rawAlgorithm;
+            
+        // If no cube provided, default to removing brackets (simple approach)
+        if (cube == null)
+            return ExtractWithRestoration(rawAlgorithm);
             
         // Check if algorithm has any conditional restorations
         if (!rawAlgorithm.Contains("["))

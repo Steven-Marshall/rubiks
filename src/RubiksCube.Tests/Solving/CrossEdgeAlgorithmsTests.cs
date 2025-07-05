@@ -31,23 +31,13 @@ public class CrossEdgeAlgorithmsTests
     }
     
     [Fact]
-    public void GetAlgorithm_BottomRightCorrect_FirstEdge_ReturnsOptimized()
+    public void GetAlgorithm_BottomRightCorrect_ReturnsExpectedAlgorithm()
     {
-        // Arrange & Act - First edge optimization
-        var result = CrossEdgeAlgorithms.GetAlgorithm(CrossEdgeCase.BottomRightAligned, isFirstEdge: true);
+        // Arrange & Act
+        var result = CrossEdgeAlgorithms.GetAlgorithm(CrossEdgeCase.BottomRightAligned);
         
-        // Assert - Should use single D' move for first edge
+        // Assert - Default algorithm without preservation
         Assert.Equal("D'", result);
-    }
-    
-    [Fact]
-    public void GetAlgorithm_BottomRightCorrect_NotFirstEdge_ReturnsRegular()
-    {
-        // Arrange & Act - Regular algorithm
-        var result = CrossEdgeAlgorithms.GetAlgorithm(CrossEdgeCase.BottomRightAligned, isFirstEdge: false);
-        
-        // Assert - Should use full algorithm to preserve other edges
-        Assert.Equal("R2 U F2", result);
     }
     
     [Theory]
@@ -94,10 +84,10 @@ public class CrossEdgeAlgorithmsTests
     }
     
     [Fact]
-    public void GetAlgorithm_AllFirstEdgeOptimizations_Work()
+    public void GetAlgorithm_BottomLayerPreservation_ReturnsDifferentAlgorithms()
     {
-        // Arrange - Cases that have first-edge optimizations
-        var firstEdgeCases = new[]
+        // Arrange - Cases that have preservation variants
+        var preservationCases = new[]
         {
             CrossEdgeCase.BottomRightAligned,
             CrossEdgeCase.BottomBackAligned, 
@@ -105,17 +95,13 @@ public class CrossEdgeAlgorithmsTests
         };
         
         // Act & Assert
-        foreach (var caseType in firstEdgeCases)
+        foreach (var caseType in preservationCases)
         {
-            var regular = CrossEdgeAlgorithms.GetAlgorithm(caseType, isFirstEdge: false);
-            var optimized = CrossEdgeAlgorithms.GetAlgorithm(caseType, isFirstEdge: true);
+            var regular = CrossEdgeAlgorithms.GetAlgorithm(caseType, preserveBottomLayer: false);
+            var preserved = CrossEdgeAlgorithms.GetAlgorithm(caseType, preserveBottomLayer: true);
             
-            // Should be different algorithms
-            Assert.NotEqual(regular, optimized);
-            
-            // Optimized should be shorter for these cases
-            Assert.True(optimized.Length < regular.Length, 
-                $"First edge optimization for {caseType} should be shorter. Regular: '{regular}', Optimized: '{optimized}'");
+            // Should be different algorithms when preservation is enabled
+            Assert.NotEqual(regular, preserved);
         }
     }
 }

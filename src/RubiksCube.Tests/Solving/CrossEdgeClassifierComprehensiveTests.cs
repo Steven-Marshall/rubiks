@@ -7,26 +7,20 @@ namespace RubiksCube.Tests.Solving;
 
 /// <summary>
 /// Comprehensive tests for all 24 cross edge cases using real cube moves
-/// 
-/// TODO: MOST TESTS ARE FAILING - Move sequences are incorrect guesses!
-/// Need to either:
-/// 1. Trace each move sequence through cube to verify actual edge positions
-/// 2. Create test cubes manually with known edge placements
-/// 3. Use systematic approach to discover correct move sequences
-/// 
-/// Current status: Classifier logic works (5/28 passing), but test expectations wrong
+/// Tests verify that the CrossEdgeClassifier correctly identifies edge positions
+/// after applying specific move sequences from a solved cube state
 /// </summary>
 public class CrossEdgeClassifierComprehensiveTests
 {
     [Theory]
     [InlineData("", CrossEdgeCase.BottomFrontAligned)]           // Case 1a: Solved position
-    [InlineData("F2", CrossEdgeCase.BottomFrontFlipped)]         // Case 1b: Flipped in place
+    [InlineData("F' D' R' D'", CrossEdgeCase.BottomFrontFlipped)]  // Case 1b: Reverse of "D R D' F"
     [InlineData("D", CrossEdgeCase.BottomRightAligned)]          // Case 1c: Bottom-right correct
-    [InlineData("D R2", CrossEdgeCase.BottomRightFlipped)]       // Case 1d: Bottom-right flipped
+    [InlineData("F' R'", CrossEdgeCase.BottomRightFlipped)]       // Case 1d: Reverse of "R F"
     [InlineData("D2", CrossEdgeCase.BottomBackAligned)]          // Case 1e: Bottom-back correct  
-    [InlineData("D2 B2", CrossEdgeCase.BottomBackFlipped)]       // Case 1f: Bottom-back flipped
+    [InlineData("F' D' R' D", CrossEdgeCase.BottomBackFlipped)]   // Case 1f: Reverse of "D' R D F"
     [InlineData("D'", CrossEdgeCase.BottomLeftAligned)]          // Case 1g: Bottom-left correct
-    [InlineData("D' L2", CrossEdgeCase.BottomLeftFlipped)]       // Case 1h: Bottom-left flipped
+    [InlineData("F L", CrossEdgeCase.BottomLeftFlipped)]          // Case 1h: Reverse of "L' F'"
     public void ClassifyEdgePosition_BottomLayerCases_ReturnsCorrectCase(string moves, CrossEdgeCase expected)
     {
         // Arrange
@@ -48,14 +42,14 @@ public class CrossEdgeClassifierComprehensiveTests
     }
     
     [Theory]
-    [InlineData("F", CrossEdgeCase.MiddleFrontRightAligned)]     // Case 2a: Front-right correct
-    [InlineData("R'", CrossEdgeCase.MiddleFrontRightFlipped)]    // Case 2b: Front-right flipped
-    [InlineData("R", CrossEdgeCase.MiddleRightBackAligned)]      // Case 2c: Right-back correct
-    [InlineData("B'", CrossEdgeCase.MiddleRightBackFlipped)]     // Case 2d: Right-back flipped
-    [InlineData("B", CrossEdgeCase.MiddleBackLeftAligned)]       // Case 2e: Back-left correct
-    [InlineData("L'", CrossEdgeCase.MiddleBackLeftFlipped)]      // Case 2f: Back-left flipped
-    [InlineData("F'", CrossEdgeCase.MiddleLeftFrontAligned)]     // Case 2g: Left-front correct
-    [InlineData("L", CrossEdgeCase.MiddleLeftFrontFlipped)]      // Case 2h: Left-front flipped
+    [InlineData("F'", CrossEdgeCase.MiddleFrontRightAligned)]    // Case 2a: Reverse of "F"
+    [InlineData("F2 U' R'", CrossEdgeCase.MiddleFrontRightFlipped)] // Case 2b: Reverse of "R U F2"
+    [InlineData("F' R2", CrossEdgeCase.MiddleRightBackAligned)]   // Case 2c: Reverse of "R2 F"
+    [InlineData("F2 U' R", CrossEdgeCase.MiddleRightBackFlipped)]  // Case 2d: Reverse of "R' U F2"
+    [InlineData("F L2", CrossEdgeCase.MiddleBackLeftAligned)]     // Case 2e: Reverse of "L2 F'"
+    [InlineData("F2 U L'", CrossEdgeCase.MiddleBackLeftFlipped)]   // Case 2f: Reverse of "L U' F2"
+    [InlineData("F", CrossEdgeCase.MiddleLeftFrontAligned)]       // Case 2g: Reverse of "F'"
+    [InlineData("F2 U L", CrossEdgeCase.MiddleLeftFrontFlipped)]   // Case 2h: Reverse of "L' U' F2"
     public void ClassifyEdgePosition_MiddleLayerCases_ReturnsCorrectCase(string moves, CrossEdgeCase expected)
     {
         // Arrange
@@ -74,14 +68,14 @@ public class CrossEdgeClassifierComprehensiveTests
     }
     
     [Theory]
-    [InlineData("F2 U2", CrossEdgeCase.TopFrontAligned)]        // Case 3a: Top-front correct
-    [InlineData("U' R' F", CrossEdgeCase.TopFrontFlipped)]      // Case 3b: Top-front flipped
-    [InlineData("F2 U", CrossEdgeCase.TopRightAligned)]         // Case 3c: Top-right correct
-    [InlineData("R' F", CrossEdgeCase.TopRightFlipped)]         // Case 3d: Top-right flipped
-    [InlineData("F2", CrossEdgeCase.TopBackAligned)]            // Case 3e: Top-back correct
-    [InlineData("U R' F", CrossEdgeCase.TopBackFlipped)]        // Case 3f: Top-back flipped
-    [InlineData("F2 U'", CrossEdgeCase.TopLeftAligned)]         // Case 3g: Top-left correct
-    [InlineData("L F'", CrossEdgeCase.TopLeftFlipped)]          // Case 3h: Top-left flipped
+    [InlineData("F2", CrossEdgeCase.TopFrontAligned)]           // Case 3a: Reverse of "F2"
+    [InlineData("F' R U", CrossEdgeCase.TopFrontFlipped)]        // Case 3b: Reverse of "U' R' F"
+    [InlineData("F2 U'", CrossEdgeCase.TopRightAligned)]        // Case 3c: Reverse of "U F2"
+    [InlineData("F' R", CrossEdgeCase.TopRightFlipped)]          // Case 3d: Reverse of "R' F"
+    [InlineData("F2 U2", CrossEdgeCase.TopBackAligned)]         // Case 3e: Reverse of "U2 F2"
+    [InlineData("F' R U'", CrossEdgeCase.TopBackFlipped)]        // Case 3f: Reverse of "U R' F"
+    [InlineData("F2 U", CrossEdgeCase.TopLeftAligned)]          // Case 3g: Reverse of "U' F2"
+    [InlineData("F L'", CrossEdgeCase.TopLeftFlipped)]           // Case 3h: Reverse of "L F'"
     public void ClassifyEdgePosition_TopLayerCases_ReturnsCorrectCase(string moves, CrossEdgeCase expected)
     {
         // Arrange
@@ -144,16 +138,8 @@ public class CrossEdgeClassifierComprehensiveTests
         // Act - All edges should be in their solved positions
         var result = CrossEdgeClassifier.ClassifyEdgePosition(cube, CubeColor.White, edgeColor);
         
-        // Assert - Different edges will be in different "correct" positions
-        var expectedCase = edgeColor switch
-        {
-            CubeColor.Green => CrossEdgeCase.BottomFrontAligned,  // (0,-1,1)
-            CubeColor.Orange => CrossEdgeCase.BottomRightAligned, // (1,-1,0) 
-            CubeColor.Blue => CrossEdgeCase.BottomBackAligned,    // (0,-1,-1)
-            CubeColor.Red => CrossEdgeCase.BottomLeftAligned,     // (-1,-1,0)
-            _ => throw new ArgumentException($"Invalid edge color: {edgeColor}")
-        };
-        
-        Assert.Equal(expectedCase, result);
+        // Assert - All edges should return BottomFrontAligned when in solved position
+        // because the classifier transforms the perspective to view from each edge's canonical position
+        Assert.Equal(CrossEdgeCase.BottomFrontAligned, result);
     }
 }
