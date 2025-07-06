@@ -98,7 +98,7 @@ public class CrossAnalyzerSpecificTests
     }
 
     [Fact]
-    public void Analyze_DMoveDestroysAllCross_ShouldReturnNull()
+    public void Analyze_DMoveDestroysAllCross_ShouldReturnCrossStage()
     {
         // Arrange - D move completely destroys white cross
         var cube = Cube.CreateSolved();
@@ -108,12 +108,16 @@ public class CrossAnalyzerSpecificTests
         // Act
         var result = analyzer.Analyze(cube);
 
-        // Assert - Should return null as no cross progress remains
-        Assert.Null(result);
+        // Assert - Should return cross stage with 0/4 progress (cross edges exist but none solved)
+        Assert.NotNull(result);
+        Assert.Equal("cross", result.Stage);
+        Assert.False(result.IsComplete);
+        Assert.Equal(0, result.Progress);
+        Assert.Equal(4, result.Total);
     }
 
     [Fact]
-    public void Analyze_FDScrambleDestroysAllCross_ShouldReturnNull()
+    public void Analyze_FDScrambleDestroysAllCross_ShouldReturnCrossStage()
     {
         // Arrange - "F D" scramble completely destroys white cross
         var cube = Cube.CreateSolved();
@@ -124,8 +128,12 @@ public class CrossAnalyzerSpecificTests
         // Act
         var result = analyzer.Analyze(cube);
 
-        // Assert - Should return null as no cross progress remains
-        Assert.Null(result);
+        // Assert - Should return cross stage with 0/4 progress (cross edges exist but none solved)
+        Assert.NotNull(result);
+        Assert.Equal("cross", result.Stage);
+        Assert.False(result.IsComplete);
+        Assert.Equal(0, result.Progress);
+        Assert.Equal(4, result.Total);
     }
 
     [Fact]

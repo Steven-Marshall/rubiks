@@ -29,7 +29,7 @@ public class CrossAnalyzerTests
     }
 
     [Fact]
-    public void Analyze_ScrambledCube_ShouldReturnNullIfNoCrossProgress()
+    public void Analyze_ScrambledCube_ShouldReturnCrossStageInfo()
     {
         // Arrange
         var cube = Cube.CreateSolved();
@@ -43,14 +43,11 @@ public class CrossAnalyzerTests
         // Act
         var result = analyzer.Analyze(cube);
 
-        // Assert - Could be null if no cross progress, or have some progress
-        if (result != null)
-        {
-            // If there's some cross progress, verify it's valid
-            Assert.Equal("cross", result.Stage);
-            Assert.True(result.Progress >= 1 && result.Progress <= 4);
-            Assert.False(result.IsComplete);
-        }
+        // Assert - Should always return cross stage info (cross edges always exist)
+        Assert.NotNull(result);
+        Assert.Equal("cross", result.Stage);
+        Assert.True(result.Progress >= 0 && result.Progress <= 4);
+        // May or may not be complete depending on the scramble
     }
 
     [Fact]
@@ -151,11 +148,8 @@ public class CrossAnalyzerTests
         var result = analyzer.Analyze(cube);
 
         // Assert - Cross should be affected
-        if (result != null)
-        {
-            Assert.Equal("cross", result.Stage);
-            Assert.True(result.Progress < 4); // Should be less than complete
-        }
-        // Could also be null if move destroyed all cross progress
+        Assert.NotNull(result);
+        Assert.Equal("cross", result.Stage);
+        Assert.True(result.Progress < 4); // Should be less than complete
     }
 }

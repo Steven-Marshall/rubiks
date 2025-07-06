@@ -3,6 +3,7 @@ using RubiksCube.Core.Models;
 using RubiksCube.Core.Solving;
 using RubiksCube.Core.PatternRecognition;
 using RubiksCube.Core.Algorithms;
+using RubiksCube.Core.Extensions;
 
 namespace RubiksCube.Tests.Solving;
 
@@ -155,16 +156,11 @@ public class IntegrationCrossSolverTests
         var cube = Cube.CreateSolved();
         var solver = new CrossSolver();
         
-        // Act - Use reflection to test private FindCrossEdge method
-        var findCrossEdgeMethod = typeof(CrossSolver).GetMethod("FindCrossEdge", 
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        Assert.NotNull(findCrossEdgeMethod);
-        
-        // Assert - Should find all four cross edges
-        var whiteGreen = findCrossEdgeMethod.Invoke(solver, new object[] { cube, CubeColor.White, CubeColor.Green });
-        var whiteOrange = findCrossEdgeMethod.Invoke(solver, new object[] { cube, CubeColor.White, CubeColor.Orange });
-        var whiteBlue = findCrossEdgeMethod.Invoke(solver, new object[] { cube, CubeColor.White, CubeColor.Blue });
-        var whiteRed = findCrossEdgeMethod.Invoke(solver, new object[] { cube, CubeColor.White, CubeColor.Red });
+        // Act - Use extension method to find cross edges
+        var whiteGreen = cube.FindCrossEdge(CubeColor.White, CubeColor.Green);
+        var whiteOrange = cube.FindCrossEdge(CubeColor.White, CubeColor.Orange);
+        var whiteBlue = cube.FindCrossEdge(CubeColor.White, CubeColor.Blue);
+        var whiteRed = cube.FindCrossEdge(CubeColor.White, CubeColor.Red);
         
         Assert.NotNull(whiteGreen);
         Assert.NotNull(whiteOrange);

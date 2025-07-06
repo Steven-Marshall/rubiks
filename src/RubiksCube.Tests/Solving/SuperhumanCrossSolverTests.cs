@@ -143,8 +143,8 @@ public class SuperhumanCrossSolverTests
         // Assert
         Assert.NotNull(result);
         Assert.NotEmpty(result.Algorithm);
-        Assert.Contains("superhuman", result.Description.ToLowerInvariant());
-        Assert.Contains("evaluated", result.Description.ToLowerInvariant());
+        Assert.Contains("evaluating", result.Description.ToLowerInvariant());
+        Assert.Contains("24", result.Description);
         Assert.Contains("permutations", result.Description.ToLowerInvariant());
         Assert.Contains("optimal", result.Description.ToLowerInvariant());
         Assert.Contains("moves", result.Description.ToLowerInvariant());

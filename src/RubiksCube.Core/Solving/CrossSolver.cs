@@ -1,6 +1,7 @@
 using RubiksCube.Core.Models;
 using RubiksCube.Core.PatternRecognition.Models;
 using RubiksCube.Core.Algorithms;
+using RubiksCube.Core.Extensions;
 
 namespace RubiksCube.Core.Solving;
 
@@ -29,6 +30,23 @@ public class CrossSolver : ISolver
     
     public SuggestionResult? SuggestAlgorithm(Cube cube, RecognitionResult recognition)
     {
+        return SuggestAlgorithm(cube, recognition, EdgeSelectionMode.FixedOrder, null);
+    }
+    
+    /// <summary>
+    /// Edge selection modes for analyze command
+    /// </summary>
+    public enum EdgeSelectionMode
+    {
+        FixedOrder,    // Original behavior: Green → Orange → Blue → Red
+        Shortest       // New behavior: Pick edge with shortest algorithm
+    }
+    
+    /// <summary>
+    /// Suggest algorithm with customizable edge selection
+    /// </summary>
+    public SuggestionResult? SuggestAlgorithm(Cube cube, RecognitionResult recognition, EdgeSelectionMode selectionMode, CubeColor? specificEdge = null)
+    {
         if (recognition.Stage != "cross")
         {
             return null; // Not our stage
@@ -44,8 +62,32 @@ public class CrossSolver : ISolver
             );
         }
         
-        // Find the next edge to solve
-        var targetEdgeColor = FindNextEdgeToSolve(cube);
+        // Find the target edge based on selection mode
+        CubeColor? targetEdgeColor;
+        
+        if (specificEdge.HasValue)
+        {
+            // Check if the specific edge is already solved
+            var specificEdgePiece = cube.FindCrossEdge(CrossColor, specificEdge.Value);
+            if (specificEdgePiece != null && specificEdgePiece.IsSolved)
+            {
+                return new SuggestionResult(
+                    algorithm: "",
+                    description: $"{CrossColor.GetColorName()}-{specificEdge.Value.GetColorName()} edge is already solved",
+                    nextStage: "cross"
+                );
+            }
+            targetEdgeColor = specificEdge.Value;
+        }
+        else if (selectionMode == EdgeSelectionMode.Shortest)
+        {
+            targetEdgeColor = FindShortestEdgeToSolve(cube);
+        }
+        else
+        {
+            targetEdgeColor = FindNextEdgeToSolve(cube);
+        }
+        
         if (targetEdgeColor == null)
         {
             return new SuggestionResult(
@@ -72,7 +114,7 @@ public class CrossSolver : ISolver
         
         foreach (var edgeColor in crossEdgeColors)
         {
-            var edge = FindCrossEdge(cube, CrossColor, edgeColor);
+            var edge = cube.FindCrossEdge(CrossColor, edgeColor);
             if (edge != null && !edge.IsSolved)
             {
                 return edgeColor;
@@ -80,6 +122,36 @@ public class CrossSolver : ISolver
         }
         
         return null; // All edges are correctly placed
+    }
+    
+    /// <summary>
+    /// Find the edge that requires the shortest algorithm to solve
+    /// </summary>
+    private CubeColor? FindShortestEdgeToSolve(Cube cube)
+    {
+        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+        var edgeAnalysis = new List<(CubeColor Color, int MoveCount)>();
+        
+        foreach (var edgeColor in crossEdgeColors)
+        {
+            var edge = cube.FindCrossEdge(CrossColor, edgeColor);
+            if (edge != null && !edge.IsSolved)
+            {
+                var solvedCount = cube.CountSolvedCrossEdges(CrossColor);
+                var preserveBottomLayer = solvedCount > 0;
+                var solution = cube.SolveSingleCrossEdge(CrossColor, edgeColor, preserveBottomLayer);
+                
+                if (solution != null && !string.IsNullOrEmpty(solution.Algorithm))
+                {
+                    var parsedAlgo = Algorithm.Parse(solution.Algorithm);
+                    int moveCount = parsedAlgo.IsSuccess ? parsedAlgo.Value.Length : 0;
+                    edgeAnalysis.Add((edgeColor, moveCount));
+                }
+            }
+        }
+        
+        // Return the edge with the shortest algorithm
+        return edgeAnalysis.OrderBy(e => e.MoveCount).FirstOrDefault().Color;
     }
     
     /// <summary>
@@ -93,7 +165,7 @@ public class CrossSolver : ISolver
             var caseType = CrossEdgeClassifier.ClassifyEdgePosition(cube, CrossColor, edgeColor);
             
             // Step 2: Check if we need to preserve bottom layer edges
-            var solvedCount = CountSolvedCrossEdges(cube, CrossColor);
+            var solvedCount = cube.CountSolvedCrossEdges(CrossColor);
             var preserveBottomLayer = solvedCount > 0;
             
             // Step 3: Get algorithm for this case
@@ -114,7 +186,7 @@ public class CrossSolver : ISolver
         catch (Exception ex)
         {
             // If classification fails, throw the exception rather than giving generic advice
-            throw new InvalidOperationException($"Failed to classify {GetColorName(edgeColor)} edge: {ex.Message}", ex);
+            throw new InvalidOperationException($"Failed to classify {edgeColor.GetColorName()} edge: {ex.Message}", ex);
         }
     }
     
@@ -131,7 +203,7 @@ public class CrossSolver : ISolver
         {
             if (edgeColor == currentEdgeColor) continue; // Don't count current edge
             
-            var edge = FindCrossEdge(cube, CrossColor, edgeColor);
+            var edge = cube.FindCrossEdge(CrossColor, edgeColor);
             if (edge != null && edge.IsSolved)
             {
                 solvedCount++;
@@ -147,7 +219,7 @@ public class CrossSolver : ISolver
     /// </summary>
     private string CreateDescription(CubeColor edgeColor, CrossEdgeCase caseType, bool preserveBottomLayer)
     {
-        var edgeName = $"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}";
+        var edgeName = $"{CrossColor.GetColorName()}-{edgeColor.GetColorName()}";
         var baseDescription = $"Place {edgeName} edge";
         
         if (!Verbose)
@@ -203,42 +275,6 @@ public class CrossSolver : ISolver
         };
     }
     
-    /// <summary>
-    /// Find a specific cross edge by its two colors
-    /// </summary>
-    private CubePiece? FindCrossEdge(Cube cube, CubeColor crossColor, CubeColor edgeColor)
-    {
-        return cube.Edges.FirstOrDefault(edge =>
-            edge.Colors.Contains(crossColor) && edge.Colors.Contains(edgeColor));
-    }
-    
-    /// <summary>
-    /// Get human-friendly color name
-    /// </summary>
-    private string GetColorName(CubeColor color)
-    {
-        return color.ToString().ToLowerInvariant();
-    }
-    
-    /// <summary>
-    /// Count how many cross edges are already solved
-    /// </summary>
-    private int CountSolvedCrossEdges(Cube cube, CubeColor crossColor)
-    {
-        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
-        var solvedCount = 0;
-        
-        foreach (var edgeColor in crossEdgeColors)
-        {
-            var edge = FindCrossEdge(cube, crossColor, edgeColor);
-            if (edge != null && edge.IsSolved)
-            {
-                solvedCount++;
-            }
-        }
-        
-        return solvedCount;
-    }
     
     /// <summary>
     /// Debug method to analyze all 4 cross edges
@@ -253,16 +289,16 @@ public class CrossSolver : ISolver
             try
             {
                 // Find the actual edge position
-                var edge = FindCrossEdge(cube, CrossColor, edgeColor);
+                var edge = cube.FindCrossEdge(CrossColor, edgeColor);
                 if (edge == null)
                 {
-                    results.Add($"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}: NOT FOUND");
+                    results.Add($"{CrossColor.GetColorName()}-{edgeColor.GetColorName()}: NOT FOUND");
                     continue;
                 }
                 
                 // Get the classification (from edge color's perspective)
                 var caseType = CrossEdgeClassifier.ClassifyEdgePosition(cube, CrossColor, edgeColor);
-                var solvedCount = CountSolvedCrossEdges(cube, CrossColor);
+                var solvedCount = cube.CountSolvedCrossEdges(CrossColor);
                 var preserveBottomLayer = solvedCount > 0;
                 var baseAlgorithm = CrossEdgeAlgorithms.GetRawAlgorithmForDebugging(caseType);
                 var algorithm = CrossEdgeAlgorithms.GetAlgorithm(caseType, cube, CrossColor, preserveBottomLayer, edgeColor);
@@ -287,17 +323,17 @@ public class CrossSolver : ISolver
                     // Verbose mode: show canonical position, face view classification, preserve info, and algorithm transformation
                     var moveInfo = moveCount > 0 ? $" ({moveCount} move{(moveCount == 1 ? "" : "s")})" : "";
                     var preserveInfo = preserveBottomLayer ? $" [Preserve: Yes ({solvedCount} solved)]" : " [Preserve: No]";
-                    results.Add($"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}: Canonical {actualPosition} (Face view {caseType}){preserveInfo} -> Base: \"{baseAlgorithm}\" -> Final: {algorithmText}{moveInfo}");
+                    results.Add($"{CrossColor.GetColorName()}-{edgeColor.GetColorName()}: Canonical {actualPosition} (Face view {caseType}){preserveInfo} -> Base: \"{baseAlgorithm}\" -> Final: {algorithmText}{moveInfo}");
                 }
                 else
                 {
                     // Basic mode: just show canonical position
-                    results.Add($"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}: {actualPosition} -> {algorithmText}");
+                    results.Add($"{CrossColor.GetColorName()}-{edgeColor.GetColorName()}: {actualPosition} -> {algorithmText}");
                 }
             }
             catch (Exception ex)
             {
-                results.Add($"{GetColorName(CrossColor)}-{GetColorName(edgeColor)}: ERROR - {ex.Message}");
+                results.Add($"{CrossColor.GetColorName()}-{edgeColor.GetColorName()}: ERROR - {ex.Message}");
             }
         }
         
@@ -364,5 +400,119 @@ public class CrossSolver : ISolver
         }
         
         return description;
+    }
+    
+    /// <summary>
+    /// Solve the complete cross by applying algorithms until all edges are solved
+    /// This method provides the same functionality as the solve command's step-by-step approach
+    /// </summary>
+    /// <param name="cube">The cube to solve</param>
+    /// <param name="verbose">Whether to include verbose step-by-step output</param>
+    /// <returns>Tuple containing final algorithm, verbose output, and resulting cube state</returns>
+    public (string Algorithm, string VerboseOutput, Cube FinalCube) SolveCompleteCross(Cube cube, bool verbose = false)
+    {
+        var workingCube = cube.Clone();
+        var algorithmSteps = new List<string>();
+        var verboseLines = new List<string>();
+        
+        if (verbose)
+        {
+            verboseLines.Add("Solving white cross step by step...");
+            verboseLines.Add("");
+        }
+
+        int stepNumber = 1;
+        while (true)
+        {
+            // Analyze current state
+            var edgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+            var edgeAnalysis = new List<(CubeColor Color, string Algorithm, int MoveCount)>();
+            int solvedCount = 0;
+
+            foreach (var edgeColor in edgeColors)
+            {
+                var edge = workingCube.FindCrossEdge(CrossColor, edgeColor);
+                if (edge != null && edge.IsSolved)
+                {
+                    solvedCount++;
+                    continue;
+                }
+
+                // Calculate preserve parameter based on current solved edges
+                var preserveBottomLayer = solvedCount > 0;
+                var solution = workingCube.SolveSingleCrossEdge(CrossColor, edgeColor, preserveBottomLayer);
+                if (solution != null && !string.IsNullOrEmpty(solution.Algorithm))
+                {
+                    var parsedAlgo = Algorithm.Parse(solution.Algorithm);
+                    int moveCount = parsedAlgo.IsSuccess ? parsedAlgo.Value.Length : 0;
+                    edgeAnalysis.Add((edgeColor, solution.Algorithm, moveCount));
+                }
+            }
+
+            // Check if cross is complete
+            if (solvedCount == 4)
+            {
+                if (verbose)
+                {
+                    if (stepNumber == 1)
+                    {
+                        verboseLines.Add("Cross already solved!");
+                    }
+                    else
+                    {
+                        verboseLines.Add($"White cross complete! Total moves: {algorithmSteps.Sum(a => Algorithm.Parse(a).IsSuccess ? Algorithm.Parse(a).Value.Length : 0)}");
+                        var fullAlgorithm = string.Join(" ", algorithmSteps);
+                        var compressedAlgorithm = AlgorithmCompressor.Compress(fullAlgorithm);
+                        verboseLines.Add($"Full algorithm: {compressedAlgorithm}");
+                    }
+                }
+                break;
+            }
+
+            // Find shortest algorithm
+            if (!edgeAnalysis.Any())
+            {
+                break; // No more edges to solve
+            }
+
+            var shortestEdge = edgeAnalysis.OrderBy(e => e.MoveCount).First();
+            
+            if (verbose)
+            {
+                var remainingCount = 4 - solvedCount;
+                verboseLines.Add($"Step {stepNumber}: white-{shortestEdge.Color.GetColorName()} ({shortestEdge.MoveCount} move{(shortestEdge.MoveCount == 1 ? "" : "s")}) -> {shortestEdge.Algorithm}");
+            }
+
+            // Apply the algorithm
+            var algorithmResult = Algorithm.Parse(shortestEdge.Algorithm);
+            if (algorithmResult.IsSuccess)
+            {
+                foreach (var move in algorithmResult.Value.Moves)
+                {
+                    workingCube.ApplyMove(move);
+                }
+                algorithmSteps.Add(shortestEdge.Algorithm);
+            }
+
+            if (verbose)
+            {
+                var newSolvedCount = workingCube.CountSolvedCrossEdges(CrossColor);
+                var remainingCount = 4 - newSolvedCount;
+                verboseLines.Add($"Status: {newSolvedCount}/4 edges solved{(remainingCount > 0 ? $" ({remainingCount} remaining)" : "")}");
+                verboseLines.Add("");
+            }
+
+            stepNumber++;
+        }
+
+        // Prepare final algorithm
+        var finalAlgorithm = "";
+        if (algorithmSteps.Any())
+        {
+            var fullAlgorithm = string.Join(" ", algorithmSteps);
+            finalAlgorithm = AlgorithmCompressor.Compress(fullAlgorithm);
+        }
+
+        return (finalAlgorithm, string.Join("\n", verboseLines), workingCube);
     }
 }

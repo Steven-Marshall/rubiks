@@ -1,6 +1,8 @@
 using RubiksCube.Core.Models;
 using RubiksCube.Core.PatternRecognition.Models;
 using RubiksCube.Core.Algorithms;
+using RubiksCube.Core.Extensions;
+using System.Text;
 
 namespace RubiksCube.Core.Solving;
 
@@ -62,9 +64,10 @@ public class SuperhumanCrossSolver : ISolver
     private SuggestionResult FindOptimalCrossSolution(Cube cube)
     {
         var edgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
-        var unsolvedEdges = GetUnsolvedEdges(cube, edgeColors);
         
-        if (unsolvedEdges.Count == 0)
+        // Check if cross is already complete
+        var solvedCount = edgeColors.Count(color => cube.IsEdgeSolved(CrossColor, color));
+        if (solvedCount == 4)
         {
             return new SuggestionResult(
                 algorithm: "",
@@ -73,26 +76,15 @@ public class SuperhumanCrossSolver : ISolver
             );
         }
         
-        if (unsolvedEdges.Count == 1)
-        {
-            // Only one edge to solve - still use superhuman approach for consistency
-            var singleEdgeSolution = SolveSingleEdgeOnCube(cube, unsolvedEdges[0]);
-            if (singleEdgeSolution != null)
-            {
-                var optimalDescription = singleEdgeSolution.Description.Replace("Place", "Optimal solution:");
-                return new SuggestionResult(
-                    algorithm: singleEdgeSolution.Algorithm,
-                    description: optimalDescription,
-                    nextStage: singleEdgeSolution.NextStage
-                );
-            }
-        }
-        
-        // Try all permutations of unsolved edges
-        var allPermutations = GeneratePermutations(unsolvedEdges);
+        // Always try all permutations of all 4 edges for true optimization
+        var allEdges = edgeColors.ToList();
+        var allPermutations = GeneratePermutations(allEdges);
         var bestSolution = new SuggestionResult("", "No solution found", "cross");
         var shortestMoveCount = int.MaxValue;
         var evaluatedSolutions = 0;
+        
+        // Track all permutation results for verbose output
+        var permutationResults = new List<PermutationResult>();
         
         foreach (var permutation in allPermutations)
         {
@@ -102,6 +94,16 @@ public class SuperhumanCrossSolver : ISolver
             if (solution != null)
             {
                 var moveCount = CountMoves(solution.Algorithm);
+                
+                // Track this permutation's result
+                permutationResults.Add(new PermutationResult
+                {
+                    Permutation = permutation,
+                    Solution = solution,
+                    MoveCount = moveCount,
+                    PermutationNumber = evaluatedSolutions
+                });
+                
                 if (moveCount < shortestMoveCount)
                 {
                     shortestMoveCount = moveCount;
@@ -110,12 +112,8 @@ public class SuperhumanCrossSolver : ISolver
             }
         }
         
-        // Add superhuman optimization details to description
-        var description = bestSolution.Description;
-        if (Verbose)
-        {
-            description += $" (Superhuman: evaluated {evaluatedSolutions} permutations, optimal: {shortestMoveCount} moves)";
-        }
+        // Generate description based on verbose mode
+        var description = GenerateDescription(bestSolution, permutationResults, shortestMoveCount);
         
         return new SuggestionResult(
             algorithm: bestSolution.Algorithm,
@@ -124,33 +122,6 @@ public class SuperhumanCrossSolver : ISolver
         );
     }
     
-    /// <summary>
-    /// Get list of unsolved cross edge colors
-    /// </summary>
-    private List<CubeColor> GetUnsolvedEdges(Cube cube, CubeColor[] edgeColors)
-    {
-        var unsolvedEdges = new List<CubeColor>();
-        
-        foreach (var edgeColor in edgeColors)
-        {
-            var edge = FindCrossEdge(cube, CrossColor, edgeColor);
-            if (edge != null && !IsEdgeSolved(cube, CrossColor, edgeColor))
-            {
-                unsolvedEdges.Add(edgeColor);
-            }
-        }
-        
-        return unsolvedEdges;
-    }
-    
-    /// <summary>
-    /// Check if a cross edge is in its solved position and orientation
-    /// </summary>
-    private bool IsEdgeSolved(Cube cube, CubeColor crossColor, CubeColor edgeColor)
-    {
-        var caseType = CrossEdgeClassifier.ClassifyEdgePosition(cube, crossColor, edgeColor);
-        return caseType == CrossEdgeCase.BottomFrontAligned; // After transformation, solved edges show as BottomFrontAligned
-    }
     
     /// <summary>
     /// Generate all permutations of edge colors to try different solve orders
@@ -191,17 +162,21 @@ public class SuperhumanCrossSolver : ISolver
             foreach (var edgeColor in edgeOrder)
             {
                 // Check if this edge is already solved on the working cube
-                if (IsEdgeSolved(workingCube, CrossColor, edgeColor))
+                if (workingCube.IsEdgeSolved(CrossColor, edgeColor))
                 {
                     continue; // Skip already solved edges
                 }
                 
+                // Calculate preserve parameter based on current solved edges
+                var currentSolvedCount = workingCube.CountSolvedCrossEdges(CrossColor);
+                var preserveBottomLayer = currentSolvedCount > 0;
+                
                 // Solve this specific edge
-                var edgeSolution = SolveSingleEdgeOnCube(workingCube, edgeColor);
+                var edgeSolution = workingCube.SolveSingleCrossEdge(CrossColor, edgeColor, preserveBottomLayer);
                 if (edgeSolution != null && !string.IsNullOrEmpty(edgeSolution.Algorithm))
                 {
                     algorithms.Add(edgeSolution.Algorithm);
-                    descriptions.Add($"{GetColorName(edgeColor)} edge");
+                    descriptions.Add($"{edgeColor.GetColorName()} edge");
                     
                     // Apply the moves to the working cube for next iteration
                     var algorithmResult = Algorithm.Parse(edgeSolution.Algorithm);
@@ -218,6 +193,29 @@ public class SuperhumanCrossSolver : ISolver
             // Combine all algorithms and compress
             var combinedAlgorithm = string.Join(" ", algorithms);
             var compressedAlgorithm = string.IsNullOrEmpty(combinedAlgorithm) ? "" : AlgorithmCompressor.Compress(combinedAlgorithm);
+            
+            // Validation: Test the final combined algorithm on original cube
+            if (!string.IsNullOrEmpty(compressedAlgorithm))
+            {
+                var testCube = cube.Clone();
+                var finalResult = Algorithm.Parse(compressedAlgorithm);
+                if (finalResult.IsSuccess)
+                {
+                    foreach (var move in finalResult.Value.Moves)
+                    {
+                        testCube.ApplyMove(move);
+                    }
+                    
+                    // Verify all cross edges are solved
+                    var allEdgesSolved = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red }
+                        .All(edgeColor => testCube.IsEdgeSolved(CrossColor, edgeColor));
+                    
+                    if (!allEdgesSolved)
+                    {
+                        return null; // This permutation doesn't actually work
+                    }
+                }
+            }
             
             var description = descriptions.Count > 0 ? 
                 $"Optimal sequence: {string.Join(" → ", descriptions)}" : 
@@ -236,57 +234,6 @@ public class SuperhumanCrossSolver : ISolver
         }
     }
     
-    /// <summary>
-    /// Solve a single edge on a specific cube state
-    /// </summary>
-    private SuggestionResult SolveSingleEdgeOnCube(Cube cube, CubeColor edgeColor)
-    {
-        try
-        {
-            // Classify the edge position and orientation
-            var caseType = CrossEdgeClassifier.ClassifyEdgePosition(cube, CrossColor, edgeColor);
-            
-            // Check if we need to preserve bottom layer edges
-            var solvedCount = CountSolvedCrossEdges(cube);
-            var preserveBottomLayer = solvedCount > 0;
-            
-            // Get algorithm for this case
-            var algorithm = CrossEdgeAlgorithms.GetAlgorithm(caseType, cube, CrossColor, preserveBottomLayer, edgeColor);
-            
-            // Compress algorithm to remove redundant moves
-            var compressedAlgorithm = string.IsNullOrEmpty(algorithm) ? "" : AlgorithmCompressor.Compress(algorithm);
-            
-            var description = $"Place {GetColorName(CrossColor)}-{GetColorName(edgeColor)} edge";
-            
-            return new SuggestionResult(
-                algorithm: compressedAlgorithm,
-                description: description,
-                nextStage: "cross"
-            );
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Failed to solve {GetColorName(edgeColor)} edge: {ex.Message}", ex);
-        }
-    }
-    
-    /// <summary>
-    /// Solve a single edge using the standard solver (for when only one edge remains)
-    /// </summary>
-    private SuggestionResult SolveSingleEdge(Cube cube, CubeColor edgeColor)
-    {
-        // Create a fake recognition result for the standard solver
-        var recognition = new RecognitionResult(
-            stage: "cross",
-            isComplete: false,
-            progress: 3, // 3/4 complete (last edge)
-            total: 4,
-            description: "Final cross edge"
-        );
-        
-        return _standardSolver.SuggestAlgorithm(cube, recognition) ?? 
-               new SuggestionResult("", "Failed to solve edge", "cross");
-    }
     
     /// <summary>
     /// Count the number of moves in an algorithm string
@@ -299,29 +246,66 @@ public class SuperhumanCrossSolver : ISolver
         return algorithm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
     }
     
+    
     /// <summary>
-    /// Count how many cross edges are already solved
+    /// Generate description based on verbose mode and permutation results
     /// </summary>
-    private int CountSolvedCrossEdges(Cube cube)
+    private string GenerateDescription(SuggestionResult bestSolution, List<PermutationResult> permutationResults, int shortestMoveCount)
     {
-        var edgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
-        return edgeColors.Count(edgeColor => IsEdgeSolved(cube, CrossColor, edgeColor));
+        if (!Verbose)
+        {
+            // Non-verbose: just return the basic description
+            return bestSolution.Description;
+        }
+        
+        // Verbose: show detailed permutation analysis
+        var description = new StringBuilder();
+        description.AppendLine($"Evaluating all 24 permutations for optimal cross solution...");
+        description.AppendLine();
+        
+        var sortedResults = permutationResults.OrderBy(r => r.PermutationNumber).ToList();
+        var bestMoveCount = permutationResults.Min(r => r.MoveCount);
+        
+        foreach (var result in sortedResults)
+        {
+            var permutationStr = string.Join(" → ", result.Permutation.Select(color => color.GetColorName()));
+            var isOptimal = result.MoveCount == bestMoveCount ? " ⭐ OPTIMAL" : "";
+            
+            description.AppendLine($"Permutation {result.PermutationNumber}/24: {permutationStr}{isOptimal}");
+            description.AppendLine($"  Total: {result.MoveCount} moves | Combined: {result.Solution.Algorithm}");
+            description.AppendLine();
+        }
+        
+        // Summary statistics
+        description.AppendLine("Summary:");
+        description.AppendLine($"- Best solution: {bestMoveCount} moves");
+        if (permutationResults.Count > 0)
+        {
+            var worstMoveCount = permutationResults.Max(r => r.MoveCount);
+            var averageMoveCount = permutationResults.Average(r => r.MoveCount);
+            description.AppendLine($"- Worst solution: {worstMoveCount} moves");
+            description.AppendLine($"- Average: {averageMoveCount:F1} moves");
+        }
+        
+        var bestPermutation = sortedResults.FirstOrDefault(r => r.MoveCount == bestMoveCount);
+        if (bestPermutation != null)
+        {
+            var optimalSequence = string.Join(" → ", bestPermutation.Permutation.Select(color => color.GetColorName()));
+            description.AppendLine($"- Optimal sequence: {optimalSequence}");
+            description.AppendLine($"- Selected algorithm: {bestSolution.Algorithm}");
+        }
+        
+        return description.ToString().TrimEnd();
     }
     
     /// <summary>
-    /// Find a cross edge piece
+    /// Helper class to track permutation results
     /// </summary>
-    private CubePiece? FindCrossEdge(Cube cube, CubeColor crossColor, CubeColor edgeColor)
+    private class PermutationResult
     {
-        return cube.Edges.FirstOrDefault(edge =>
-            edge.Colors.Contains(crossColor) && edge.Colors.Contains(edgeColor));
-    }
-    
-    /// <summary>
-    /// Get human-readable color name
-    /// </summary>
-    private string GetColorName(CubeColor color)
-    {
-        return color.ToString().ToLowerInvariant();
+        public List<CubeColor> Permutation { get; set; } = new();
+        public SuggestionResult Solution { get; set; } = new("", "", "");
+        public int MoveCount { get; set; }
+        public int PermutationNumber { get; set; }
     }
 }
