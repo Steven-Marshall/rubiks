@@ -2,6 +2,9 @@ using RubiksCube.Core.Models;
 using RubiksCube.Core.PatternRecognition.Models;
 using RubiksCube.Core.Algorithms;
 using RubiksCube.Core.Extensions;
+using RubiksCube.Core.Constants;
+using RubiksCube.Core.Utilities;
+using RubiksCube.Core.Services;
 using System.Text;
 
 namespace RubiksCube.Core.Solving;
@@ -63,11 +66,10 @@ public class SuperhumanCrossSolver : ISolver
     /// </summary>
     private SuggestionResult FindOptimalCrossSolution(Cube cube)
     {
-        var edgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+        var edgeColors = CrossConstants.StandardEdgeColors;
         
         // Check if cross is already complete
-        var solvedCount = edgeColors.Count(color => cube.IsEdgeSolved(CrossColor, color));
-        if (solvedCount == 4)
+        if (CrossEdgeService.IsCrossComplete(cube, CrossColor))
         {
             return new SuggestionResult(
                 algorithm: "",
@@ -93,7 +95,7 @@ public class SuperhumanCrossSolver : ISolver
             
             if (solution != null)
             {
-                var moveCount = CountMoves(solution.Algorithm);
+                var moveCount = AlgorithmUtilities.CountMoves(solution.Algorithm);
                 
                 // Track this permutation's result
                 permutationResults.Add(new PermutationResult
@@ -150,79 +152,33 @@ public class SuperhumanCrossSolver : ISolver
     
     /// <summary>
     /// Evaluate a specific permutation of edge solve order
+    /// Now uses CrossSolvingService for unified logic with CrossSolver
     /// </summary>
     private SuggestionResult? EvaluatePermutation(Cube cube, List<CubeColor> edgeOrder)
     {
-        var algorithms = new List<string>();
-        var workingCube = cube.Clone();
-        var descriptions = new List<string>();
-        
         try
         {
-            foreach (var edgeColor in edgeOrder)
+            // Use the unified CrossSolvingService to solve with this specific edge order
+            var solution = CrossSolvingService.SolveWithOrder(cube, CrossColor, edgeOrder, verbose: false);
+            
+            // Validate the solution actually solves the cross
+            if (!CrossSolvingService.ValidateSolution(cube, CrossColor, solution.Algorithm))
             {
-                // Check if this edge is already solved on the working cube
-                if (workingCube.IsEdgeSolved(CrossColor, edgeColor))
-                {
-                    continue; // Skip already solved edges
-                }
-                
-                // Calculate preserve parameter based on current solved edges
-                var currentSolvedCount = workingCube.CountSolvedCrossEdges(CrossColor);
-                var preserveBottomLayer = currentSolvedCount > 0;
-                
-                // Solve this specific edge
-                var edgeSolution = workingCube.SolveSingleCrossEdge(CrossColor, edgeColor, preserveBottomLayer);
-                if (edgeSolution != null && !string.IsNullOrEmpty(edgeSolution.Algorithm))
-                {
-                    algorithms.Add(edgeSolution.Algorithm);
-                    descriptions.Add($"{edgeColor.GetColorName()} edge");
-                    
-                    // Apply the moves to the working cube for next iteration
-                    var algorithmResult = Algorithm.Parse(edgeSolution.Algorithm);
-                    if (algorithmResult.IsSuccess)
-                    {
-                        foreach (var move in algorithmResult.Value.Moves)
-                        {
-                            workingCube.ApplyMove(move);
-                        }
-                    }
-                }
+                return null; // This permutation doesn't actually work
             }
             
-            // Combine all algorithms and compress
-            var combinedAlgorithm = string.Join(" ", algorithms);
-            var compressedAlgorithm = string.IsNullOrEmpty(combinedAlgorithm) ? "" : AlgorithmCompressor.Compress(combinedAlgorithm);
+            // Create description from the solved edges
+            var solvedEdges = solution.EdgeAnalysis
+                .Where(e => !e.IsSolved && !string.IsNullOrEmpty(e.Algorithm))
+                .Select(e => $"{e.EdgeColor.GetColorName()} edge")
+                .ToList();
             
-            // Validation: Test the final combined algorithm on original cube
-            if (!string.IsNullOrEmpty(compressedAlgorithm))
-            {
-                var testCube = cube.Clone();
-                var finalResult = Algorithm.Parse(compressedAlgorithm);
-                if (finalResult.IsSuccess)
-                {
-                    foreach (var move in finalResult.Value.Moves)
-                    {
-                        testCube.ApplyMove(move);
-                    }
-                    
-                    // Verify all cross edges are solved
-                    var allEdgesSolved = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red }
-                        .All(edgeColor => testCube.IsEdgeSolved(CrossColor, edgeColor));
-                    
-                    if (!allEdgesSolved)
-                    {
-                        return null; // This permutation doesn't actually work
-                    }
-                }
-            }
-            
-            var description = descriptions.Count > 0 ? 
-                $"Optimal sequence: {string.Join(" → ", descriptions)}" : 
+            var description = solvedEdges.Count > 0 ? 
+                $"Optimal sequence: {string.Join(" → ", solvedEdges)}" : 
                 "Cross optimization complete";
             
             return new SuggestionResult(
-                algorithm: compressedAlgorithm,
+                algorithm: solution.Algorithm,
                 description: description,
                 nextStage: "cross"
             );
@@ -235,16 +191,6 @@ public class SuperhumanCrossSolver : ISolver
     }
     
     
-    /// <summary>
-    /// Count the number of moves in an algorithm string
-    /// </summary>
-    private int CountMoves(string algorithm)
-    {
-        if (string.IsNullOrWhiteSpace(algorithm))
-            return 0;
-            
-        return algorithm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-    }
     
     
     /// <summary>

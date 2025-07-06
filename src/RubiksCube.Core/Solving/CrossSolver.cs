@@ -2,6 +2,9 @@ using RubiksCube.Core.Models;
 using RubiksCube.Core.PatternRecognition.Models;
 using RubiksCube.Core.Algorithms;
 using RubiksCube.Core.Extensions;
+using RubiksCube.Core.Constants;
+using RubiksCube.Core.Utilities;
+using RubiksCube.Core.Services;
 
 namespace RubiksCube.Core.Solving;
 
@@ -81,11 +84,11 @@ public class CrossSolver : ISolver
         }
         else if (selectionMode == EdgeSelectionMode.Shortest)
         {
-            targetEdgeColor = FindShortestEdgeToSolve(cube);
+            targetEdgeColor = CrossEdgeService.FindShortestEdge(cube, CrossColor);
         }
         else
         {
-            targetEdgeColor = FindNextEdgeToSolve(cube);
+            targetEdgeColor = CrossEdgeService.FindNextEdgeInOrder(cube, CrossColor);
         }
         
         if (targetEdgeColor == null)
@@ -103,56 +106,7 @@ public class CrossSolver : ISolver
         return solution;
     }
     
-    /// <summary>
-    /// Find the next cross edge color to work on
-    /// Returns the first unsolved edge in solve order
-    /// </summary>
-    private CubeColor? FindNextEdgeToSolve(Cube cube)
-    {
-        // Define cross edge colors in solve order: Green, Orange, Blue, Red
-        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
-        
-        foreach (var edgeColor in crossEdgeColors)
-        {
-            var edge = cube.FindCrossEdge(CrossColor, edgeColor);
-            if (edge != null && !edge.IsSolved)
-            {
-                return edgeColor;
-            }
-        }
-        
-        return null; // All edges are correctly placed
-    }
     
-    /// <summary>
-    /// Find the edge that requires the shortest algorithm to solve
-    /// </summary>
-    private CubeColor? FindShortestEdgeToSolve(Cube cube)
-    {
-        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
-        var edgeAnalysis = new List<(CubeColor Color, int MoveCount)>();
-        
-        foreach (var edgeColor in crossEdgeColors)
-        {
-            var edge = cube.FindCrossEdge(CrossColor, edgeColor);
-            if (edge != null && !edge.IsSolved)
-            {
-                var solvedCount = cube.CountSolvedCrossEdges(CrossColor);
-                var preserveBottomLayer = solvedCount > 0;
-                var solution = cube.SolveSingleCrossEdge(CrossColor, edgeColor, preserveBottomLayer);
-                
-                if (solution != null && !string.IsNullOrEmpty(solution.Algorithm))
-                {
-                    var parsedAlgo = Algorithm.Parse(solution.Algorithm);
-                    int moveCount = parsedAlgo.IsSuccess ? parsedAlgo.Value.Length : 0;
-                    edgeAnalysis.Add((edgeColor, moveCount));
-                }
-            }
-        }
-        
-        // Return the edge with the shortest algorithm
-        return edgeAnalysis.OrderBy(e => e.MoveCount).FirstOrDefault().Color;
-    }
     
     /// <summary>
     /// Solve a single cross edge using the new 24-case systematic approach
@@ -165,8 +119,7 @@ public class CrossSolver : ISolver
             var caseType = CrossEdgeClassifier.ClassifyEdgePosition(cube, CrossColor, edgeColor);
             
             // Step 2: Check if we need to preserve bottom layer edges
-            var solvedCount = cube.CountSolvedCrossEdges(CrossColor);
-            var preserveBottomLayer = solvedCount > 0;
+            var preserveBottomLayer = CrossEdgeService.ShouldPreserveBottomLayer(cube, CrossColor);
             
             // Step 3: Get algorithm for this case
             var algorithm = CrossEdgeAlgorithms.GetAlgorithm(caseType, cube, CrossColor, preserveBottomLayer, edgeColor);
@@ -195,7 +148,7 @@ public class CrossSolver : ISolver
     /// </summary>
     public bool IsFirstEdge(Cube cube, CubeColor currentEdgeColor)
     {
-        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+        var crossEdgeColors = CrossConstants.StandardEdgeColors;
         
         // Count how many edges are already solved
         int solvedCount = 0;
@@ -282,7 +235,7 @@ public class CrossSolver : ISolver
     public string AnalyzeAllCrossEdges(Cube cube, bool verbose = false)
     {
         var results = new List<string>();
-        var edgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+        var edgeColors = CrossConstants.StandardEdgeColors;
         
         foreach (var edgeColor in edgeColors)
         {
@@ -404,115 +357,16 @@ public class CrossSolver : ISolver
     
     /// <summary>
     /// Solve the complete cross by applying algorithms until all edges are solved
-    /// This method provides the same functionality as the solve command's step-by-step approach
+    /// Now uses CrossSolvingService for unified logic with SuperhumanCrossSolver
     /// </summary>
     /// <param name="cube">The cube to solve</param>
     /// <param name="verbose">Whether to include verbose step-by-step output</param>
     /// <returns>Tuple containing final algorithm, verbose output, and resulting cube state</returns>
     public (string Algorithm, string VerboseOutput, Cube FinalCube) SolveCompleteCross(Cube cube, bool verbose = false)
     {
-        var workingCube = cube.Clone();
-        var algorithmSteps = new List<string>();
-        var verboseLines = new List<string>();
+        // Use the new unified CrossSolvingService for shortest-first solving
+        var solution = CrossSolvingService.SolveOptimal(cube, CrossColor, verbose);
         
-        if (verbose)
-        {
-            verboseLines.Add("Solving white cross step by step...");
-            verboseLines.Add("");
-        }
-
-        int stepNumber = 1;
-        while (true)
-        {
-            // Analyze current state
-            var edgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
-            var edgeAnalysis = new List<(CubeColor Color, string Algorithm, int MoveCount)>();
-            int solvedCount = 0;
-
-            foreach (var edgeColor in edgeColors)
-            {
-                var edge = workingCube.FindCrossEdge(CrossColor, edgeColor);
-                if (edge != null && edge.IsSolved)
-                {
-                    solvedCount++;
-                    continue;
-                }
-
-                // Calculate preserve parameter based on current solved edges
-                var preserveBottomLayer = solvedCount > 0;
-                var solution = workingCube.SolveSingleCrossEdge(CrossColor, edgeColor, preserveBottomLayer);
-                if (solution != null && !string.IsNullOrEmpty(solution.Algorithm))
-                {
-                    var parsedAlgo = Algorithm.Parse(solution.Algorithm);
-                    int moveCount = parsedAlgo.IsSuccess ? parsedAlgo.Value.Length : 0;
-                    edgeAnalysis.Add((edgeColor, solution.Algorithm, moveCount));
-                }
-            }
-
-            // Check if cross is complete
-            if (solvedCount == 4)
-            {
-                if (verbose)
-                {
-                    if (stepNumber == 1)
-                    {
-                        verboseLines.Add("Cross already solved!");
-                    }
-                    else
-                    {
-                        verboseLines.Add($"White cross complete! Total moves: {algorithmSteps.Sum(a => Algorithm.Parse(a).IsSuccess ? Algorithm.Parse(a).Value.Length : 0)}");
-                        var fullAlgorithm = string.Join(" ", algorithmSteps);
-                        var compressedAlgorithm = AlgorithmCompressor.Compress(fullAlgorithm);
-                        verboseLines.Add($"Full algorithm: {compressedAlgorithm}");
-                    }
-                }
-                break;
-            }
-
-            // Find shortest algorithm
-            if (!edgeAnalysis.Any())
-            {
-                break; // No more edges to solve
-            }
-
-            var shortestEdge = edgeAnalysis.OrderBy(e => e.MoveCount).First();
-            
-            if (verbose)
-            {
-                var remainingCount = 4 - solvedCount;
-                verboseLines.Add($"Step {stepNumber}: white-{shortestEdge.Color.GetColorName()} ({shortestEdge.MoveCount} move{(shortestEdge.MoveCount == 1 ? "" : "s")}) -> {shortestEdge.Algorithm}");
-            }
-
-            // Apply the algorithm
-            var algorithmResult = Algorithm.Parse(shortestEdge.Algorithm);
-            if (algorithmResult.IsSuccess)
-            {
-                foreach (var move in algorithmResult.Value.Moves)
-                {
-                    workingCube.ApplyMove(move);
-                }
-                algorithmSteps.Add(shortestEdge.Algorithm);
-            }
-
-            if (verbose)
-            {
-                var newSolvedCount = workingCube.CountSolvedCrossEdges(CrossColor);
-                var remainingCount = 4 - newSolvedCount;
-                verboseLines.Add($"Status: {newSolvedCount}/4 edges solved{(remainingCount > 0 ? $" ({remainingCount} remaining)" : "")}");
-                verboseLines.Add("");
-            }
-
-            stepNumber++;
-        }
-
-        // Prepare final algorithm
-        var finalAlgorithm = "";
-        if (algorithmSteps.Any())
-        {
-            var fullAlgorithm = string.Join(" ", algorithmSteps);
-            finalAlgorithm = AlgorithmCompressor.Compress(fullAlgorithm);
-        }
-
-        return (finalAlgorithm, string.Join("\n", verboseLines), workingCube);
+        return (solution.Algorithm, solution.VerboseOutput, solution.FinalCube);
     }
 }

@@ -2,6 +2,7 @@ using System.Linq;
 using System.Text;
 using RubiksCube.Core.Models;
 using RubiksCube.Core.Algorithms;
+using RubiksCube.Core.Constants;
 
 namespace RubiksCube.Core.Solving;
 
@@ -219,7 +220,7 @@ public static class CrossEdgeAlgorithms
     /// </summary>
     private static int CountSolvedCrossEdges(Cube cube, CubeColor crossColor)
     {
-        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+        var crossEdgeColors = CrossConstants.StandardEdgeColors;
         var solvedCount = 0;
         
         foreach (var edgeColor in crossEdgeColors)

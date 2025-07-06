@@ -7,6 +7,7 @@ using RubiksCube.Core.PatternRecognition;
 using RubiksCube.Core.PatternRecognition.Models;
 using RubiksCube.Core.Solving;
 using RubiksCube.Core.Extensions;
+using RubiksCube.CLI.Configuration;
 using System.Text.Json;
 
 namespace RubiksCube.CLI;
@@ -513,7 +514,7 @@ class Program
             // Check if we should show all cross edges analysis
             if (allEdges)
             {
-                var crossSolver = new CrossSolver(CubeColor.White);
+                var crossSolver = CrossConfiguration.CreateCrossSolver(args);
                 var edgeAnalysis = crossSolver.AnalyzeAllCrossEdges(cube, verbose);
                 Console.WriteLine("Cross edge analysis for white cross:");
                 Console.WriteLine("=====================================");
@@ -529,8 +530,8 @@ class Program
             if (shortest || specificEdge.HasValue)
             {
                 // Use CrossSolver directly with custom parameters
-                var crossSolver = new CrossSolver(CubeColor.White);
-                var crossAnalyzer = new CrossAnalyzer(CubeColor.White);
+                var crossSolver = CrossConfiguration.CreateCrossSolver(args);
+                var crossAnalyzer = CrossConfiguration.CreateCrossAnalyzer(args);
                 
                 // Get recognition result first
                 var recognition = crossAnalyzer.Analyze(cube);
@@ -729,11 +730,11 @@ class Program
             
             if (level == "superhuman")
             {
-                var superhumanSolver = new SuperhumanCrossSolver(CubeColor.White);
+                var superhumanSolver = CrossConfiguration.CreateSuperhumanCrossSolver(args);
                 superhumanSolver.Verbose = verbose;
                 
                 // Create a fake recognition for the superhuman solver
-                var crossProgress = cube.CountSolvedCrossEdges(CubeColor.White);
+                var crossProgress = cube.CountSolvedCrossEdges(CrossConfiguration.GetCrossColor(args));
                 var recognition = new RecognitionResult(
                     stage: "cross",
                     isComplete: crossProgress == 4,
@@ -772,7 +773,7 @@ class Program
             else
             {
                 // Use standard pattern-based solver
-                var crossSolver = new CrossSolver(CubeColor.White);
+                var crossSolver = CrossConfiguration.CreateCrossSolver(args);
                 var solution = crossSolver.SolveCompleteCross(cube, verbose);
                 algorithm = solution.Algorithm;
                 verboseOutput = solution.VerboseOutput;

@@ -2,6 +2,7 @@ using RubiksCube.Core.Models;
 using RubiksCube.Core.PatternRecognition.Models;
 using RubiksCube.Core.Algorithms;
 using RubiksCube.Core.Solving;
+using RubiksCube.Core.Constants;
 
 namespace RubiksCube.Core.Extensions;
 
@@ -31,7 +32,7 @@ public static class CubeExtensions
     /// <returns>Number of solved cross edges (0-4)</returns>
     public static int CountSolvedCrossEdges(this Cube cube, CubeColor crossColor)
     {
-        var crossEdgeColors = new[] { CubeColor.Green, CubeColor.Orange, CubeColor.Blue, CubeColor.Red };
+        var crossEdgeColors = CrossConstants.StandardEdgeColors;
         var solvedCount = 0;
         
         foreach (var edgeColor in crossEdgeColors)
