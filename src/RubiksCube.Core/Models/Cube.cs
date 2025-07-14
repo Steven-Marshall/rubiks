@@ -159,14 +159,14 @@ public class Cube
     
     /// <summary>
     /// X rotation - rotates entire cube around X-axis (like rotating along Right-Left axis)
-    /// Uses Python ROT_YZ_CW matrix to rotate all pieces
+    /// Uses Python ROT_YZ_CC matrix to rotate all pieces
     /// </summary>
     public void X()
     {
         var matrix = new int[,] {
             { 1, 0, 0 },
-            { 0, 0, 1 },
-            { 0, -1, 0 }
+            { 0, 0, -1 },
+            { 0, 1, 0 }
         };
         RotateAllPieces(matrix);
     }
@@ -178,8 +178,8 @@ public class Cube
     {
         var matrix = new int[,] {
             { 1, 0, 0 },
-            { 0, 0, -1 },
-            { 0, 1, 0 }
+            { 0, 0, 1 },
+            { 0, -1, 0 }
         };
         RotateAllPieces(matrix);
     }
