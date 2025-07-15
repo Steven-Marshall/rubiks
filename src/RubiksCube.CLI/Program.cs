@@ -4,6 +4,10 @@ using RubiksCube.Core.Storage;
 using RubiksCube.Core.Algorithms;
 using RubiksCube.Core.Scrambling;
 using RubiksCube.Core.PatternRecognition;
+using RubiksCube.Core.PatternRecognition.Models;
+using RubiksCube.Core.Solving;
+using RubiksCube.Core.Extensions;
+using RubiksCube.CLI.Configuration;
 using System.Text.Json;
 
 namespace RubiksCube.CLI;
@@ -32,6 +36,7 @@ class Program
                 "export" => HandleExport(args),
                 "scramble-gen" => HandleScrambleGen(args),
                 "analyze" => await HandleAnalyze(args),
+                "solve" => await HandleSolve(args),
                 "help" or "--help" or "-h" => HandleHelp(),
                 _ => HandleUnknownCommand(command)
             };
@@ -408,6 +413,9 @@ class Program
             string? cubeName = null;
             bool verbose = false;
             bool json = false;
+            bool allEdges = false;
+            bool shortest = false;
+            CubeColor? specificEdge = null;
             
             // Parse arguments
             for (int i = 1; i < args.Length; i++)
@@ -419,6 +427,57 @@ class Program
                 else if (args[i] == "--json" || args[i] == "-j")
                 {
                     json = true;
+                }
+                else if (args[i] == "--all-edges" || args[i] == "-a")
+                {
+                    allEdges = true;
+                }
+                else if (args[i] == "--shortest")
+                {
+                    shortest = true;
+                }
+                else if (args[i] == "--edge" || args[i] == "-e")
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        var edgeColorStr = args[i + 1].ToLowerInvariant();
+                        specificEdge = edgeColorStr switch
+                        {
+                            "green" or "g" => CubeColor.Green,
+                            "orange" or "o" => CubeColor.Orange,
+                            "blue" or "b" => CubeColor.Blue,
+                            "red" or "r" => CubeColor.Red,
+                            _ => null
+                        };
+                        if (specificEdge == null)
+                        {
+                            await Console.Error.WriteLineAsync($"Error: Invalid edge color '{args[i + 1]}'. Use green, orange, blue, or red.");
+                            return 1;
+                        }
+                        i++; // Skip the edge color value
+                    }
+                    else
+                    {
+                        await Console.Error.WriteLineAsync("Error: --edge requires a color value (green, orange, blue, red)");
+                        return 1;
+                    }
+                }
+                else if (args[i].StartsWith("--edge="))
+                {
+                    var edgeColorStr = args[i].Substring("--edge=".Length).ToLowerInvariant();
+                    specificEdge = edgeColorStr switch
+                    {
+                        "green" or "g" => CubeColor.Green,
+                        "orange" or "o" => CubeColor.Orange,
+                        "blue" or "b" => CubeColor.Blue,
+                        "red" or "r" => CubeColor.Red,
+                        _ => null
+                    };
+                    if (specificEdge == null)
+                    {
+                        await Console.Error.WriteLineAsync($"Error: Invalid edge color '{edgeColorStr}'. Use green, orange, blue, or red.");
+                        return 1;
+                    }
                 }
                 else if (!args[i].StartsWith("-"))
                 {
@@ -452,9 +511,72 @@ class Program
                 cube = Cube.FromJson(cubeJson.Trim());
             }
 
+            // Check if we should show all cross edges analysis
+            if (allEdges)
+            {
+                var crossSolver = CrossConfiguration.CreateCrossSolver(args);
+                var edgeAnalysis = crossSolver.AnalyzeAllCrossEdges(cube, verbose);
+                Console.WriteLine("Cross edge analysis for white cross:");
+                Console.WriteLine("=====================================");
+                Console.WriteLine(edgeAnalysis);
+                return 0;
+            }
+
             // Analyze the cube
-            var analyzer = new CubeStateAnalyzer();
-            var result = analyzer.Analyze(cube);
+            AnalysisResult result;
+            string verboseDetails = "";
+            
+            // Check if we're using custom edge selection
+            if (shortest || specificEdge.HasValue)
+            {
+                // Use CrossSolver directly with custom parameters
+                var crossSolver = CrossConfiguration.CreateCrossSolver(args);
+                var crossAnalyzer = CrossConfiguration.CreateCrossAnalyzer(args);
+                
+                // Get recognition result first
+                var recognition = crossAnalyzer.Analyze(cube);
+                if (recognition != null && recognition.Stage == "cross")
+                {
+                    var selectionMode = shortest ? CrossSolver.EdgeSelectionMode.Shortest : CrossSolver.EdgeSelectionMode.FixedOrder;
+                    var suggestion = crossSolver.SuggestAlgorithm(cube, recognition, selectionMode, specificEdge);
+                    result = new AnalysisResult(recognition, suggestion);
+                    
+                    if (verbose)
+                    {
+                        verboseDetails = GenerateCustomVerboseDetails(cube, recognition, suggestion, shortest, specificEdge);
+                    }
+                }
+                else
+                {
+                    // Fallback to normal analysis
+                    var analyzer = new CubeStateAnalyzer();
+                    if (verbose)
+                    {
+                        var (analysisResult, details) = analyzer.AnalyzeWithDetails(cube);
+                        result = analysisResult;
+                        verboseDetails = details;
+                    }
+                    else
+                    {
+                        result = analyzer.Analyze(cube);
+                    }
+                }
+            }
+            else
+            {
+                // Use standard analysis
+                var analyzer = new CubeStateAnalyzer();
+                if (verbose)
+                {
+                    var (analysisResult, details) = analyzer.AnalyzeWithDetails(cube);
+                    result = analysisResult;
+                    verboseDetails = details;
+                }
+                else
+                {
+                    result = analyzer.Analyze(cube);
+                }
+            }
 
             // Output result
             if (json)
@@ -483,23 +605,26 @@ class Program
             }
             else
             {
-                // Human-readable output
-                Console.WriteLine(result.Recognition.Description);
-                
-                if (result.Suggestion != null)
+                if (verbose)
                 {
-                    if (!string.IsNullOrEmpty(result.Suggestion.Algorithm))
-                    {
-                        Console.WriteLine($"Suggested: {result.Suggestion.Algorithm}");
-                    }
-                    else
-                    {
-                        Console.WriteLine("No moves needed");
-                    }
+                    // Verbose mode: show detailed analysis process
+                    Console.WriteLine(verboseDetails);
+                }
+                else
+                {
+                    // Non-verbose mode: show standard output
+                    Console.WriteLine(result.Recognition.Description);
                     
-                    if (verbose && !string.IsNullOrEmpty(result.Suggestion.Description))
+                    if (result.Suggestion != null)
                     {
-                        Console.WriteLine($"Description: {result.Suggestion.Description}");
+                        if (!string.IsNullOrEmpty(result.Suggestion.Algorithm))
+                        {
+                            Console.WriteLine($"Suggested: {result.Suggestion.Algorithm}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("No moves needed");
+                        }
                     }
                 }
             }
@@ -511,6 +636,205 @@ class Program
             await Console.Error.WriteLineAsync($"Error analyzing cube: {ex.Message}");
             return 1;
         }
+    }
+
+    private static async Task<int> HandleSolve(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            await Console.Error.WriteLineAsync("Error: Solve stage required");
+            await Console.Error.WriteLineAsync("Usage: rubiks solve cross [cube-name] [--verbose] [--level=pattern|superhuman]");
+            return 1;
+        }
+
+        string stage = args[1].ToLowerInvariant();
+        if (stage != "cross")
+        {
+            await Console.Error.WriteLineAsync($"Error: Unsupported solve stage '{stage}'. Only 'cross' is currently supported.");
+            return 1;
+        }
+
+        try
+        {
+            string? cubeName = null;
+            bool verbose = false;
+            string level = "pattern"; // Default to pattern-based solving
+            
+            // Parse arguments
+            for (int i = 2; i < args.Length; i++)
+            {
+                if (args[i] == "--verbose" || args[i] == "-v")
+                {
+                    verbose = true;
+                }
+                else if (args[i] == "--level" || args[i] == "-l")
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        level = args[i + 1].ToLowerInvariant();
+                        i++; // Skip the level value
+                    }
+                    else
+                    {
+                        await Console.Error.WriteLineAsync("Error: --level requires a value (pattern or superhuman)");
+                        return 1;
+                    }
+                }
+                else if (args[i].StartsWith("--level="))
+                {
+                    level = args[i].Substring("--level=".Length).ToLowerInvariant();
+                }
+                else if (!args[i].StartsWith("-"))
+                {
+                    // Assume it's a cube name
+                    cubeName = args[i];
+                }
+            }
+
+            // Validate level parameter
+            if (level != "pattern" && level != "superhuman")
+            {
+                await Console.Error.WriteLineAsync($"Error: Unsupported level '{level}'. Use 'pattern' or 'superhuman'.");
+                return 1;
+            }
+
+            Cube cube;
+            
+            // Load cube from name or stdin
+            if (cubeName != null)
+            {
+                var loadResult = CubeStorageService.Load(cubeName);
+                if (loadResult.IsFailure)
+                {
+                    await Console.Error.WriteLineAsync($"Error loading cube: {loadResult.Error}");
+                    return 1;
+                }
+                cube = loadResult.Value;
+            }
+            else
+            {
+                // Read from stdin (for piping)
+                var cubeJson = await Console.In.ReadToEndAsync();
+                if (string.IsNullOrWhiteSpace(cubeJson))
+                {
+                    await Console.Error.WriteLineAsync("Error: No cube data provided via stdin");
+                    return 1;
+                }
+                cube = Cube.FromJson(cubeJson.Trim());
+            }
+
+            // Choose solver based on level
+            string algorithm;
+            string verboseOutput;
+            Cube finalCube;
+            
+            if (level == "superhuman")
+            {
+                var superhumanSolver = CrossConfiguration.CreateSuperhumanCrossSolver(args);
+                superhumanSolver.Verbose = verbose;
+                
+                // Create a fake recognition for the superhuman solver
+                var crossProgress = cube.CountSolvedCrossEdges(CrossConfiguration.GetCrossColor(args));
+                var recognition = new RecognitionResult(
+                    stage: "cross",
+                    isComplete: crossProgress == 4,
+                    progress: crossProgress,
+                    total: 4,
+                    description: $"Cross progress: {crossProgress}/4 edges"
+                );
+                
+                var suggestion = superhumanSolver.SuggestAlgorithm(cube, recognition);
+                if (suggestion != null)
+                {
+                    algorithm = suggestion.Algorithm;
+                    verboseOutput = suggestion.Description;
+                    
+                    // Apply algorithm to get final cube state
+                    finalCube = cube.Clone();
+                    if (!string.IsNullOrEmpty(algorithm))
+                    {
+                        var algorithmResult = Algorithm.Parse(algorithm);
+                        if (algorithmResult.IsSuccess)
+                        {
+                            foreach (var move in algorithmResult.Value.Moves)
+                            {
+                                finalCube.ApplyMove(move);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    algorithm = "";
+                    verboseOutput = "No superhuman solution found";
+                    finalCube = cube;
+                }
+            }
+            else
+            {
+                // Use standard pattern-based solver
+                var crossSolver = CrossConfiguration.CreateCrossSolver(args);
+                var solution = crossSolver.SolveCompleteCross(cube, verbose);
+                algorithm = solution.Algorithm;
+                verboseOutput = solution.VerboseOutput;
+                finalCube = solution.FinalCube;
+            }
+            
+            if (verbose)
+            {
+                Console.WriteLine(verboseOutput);
+            }
+            else
+            {
+                Console.WriteLine(algorithm);
+            }
+
+            // Note: We don't save the cube state - solve command only outputs the solution algorithm
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"Error solving cross: {ex.Message}");
+            return 1;
+        }
+    }
+
+    private static string GenerateCustomVerboseDetails(Cube cube, RecognitionResult recognition, SuggestionResult? suggestion, bool shortest, CubeColor? specificEdge)
+    {
+        var details = new List<string>();
+        details.Add("Cube Analysis - Custom Edge Selection");
+        details.Add("=====================================");
+        details.Add("");
+        
+        if (specificEdge.HasValue)
+        {
+            details.Add($"Target edge: {specificEdge.Value.GetColorName()}");
+        }
+        else if (shortest)
+        {
+            details.Add("Selection mode: Shortest algorithm");
+        }
+        
+        details.Add($"Stage: {recognition.Stage}");
+        details.Add($"Progress: {recognition.Progress}/{recognition.Total}");
+        details.Add($"Complete: {(recognition.IsComplete ? "Yes" : "No")}");
+        details.Add("");
+        
+        if (suggestion != null)
+        {
+            details.Add($"Algorithm: {(string.IsNullOrEmpty(suggestion.Algorithm) ? "None needed" : suggestion.Algorithm)}");
+            details.Add($"Description: {suggestion.Description}");
+            details.Add($"Next stage: {suggestion.NextStage}");
+            
+            if (shortest && !specificEdge.HasValue)
+            {
+                details.Add("");
+                details.Add("Note: This is the shortest available algorithm among all unsolved edges.");
+            }
+        }
+        
+        return string.Join("\n", details);
     }
 
     private static int HandleHelp()
@@ -538,7 +862,8 @@ class Program
         Console.WriteLine("  rubiks delete cube-name                       Delete a saved cube");
         Console.WriteLine("  rubiks export cube-name                       Export cube JSON to stdout");
         Console.WriteLine("  rubiks scramble-gen [--moves=n] [--seed=n]    Generate a WCA scramble algorithm");
-        Console.WriteLine("  rubiks analyze [cube-name] [--json] [--verbose] Analyze cube state and suggest moves");
+        Console.WriteLine("  rubiks solve cross [cube-name] [--verbose] [--level=pattern|superhuman] Solve white cross");
+        Console.WriteLine("  rubiks analyze [cube-name] [--json] [--verbose] [--shortest] [--edge=color] Analyze cube state and suggest moves");
         Console.WriteLine("  rubiks help                                   Show this help message");
         Console.WriteLine();
         Console.WriteLine("Examples:");
@@ -560,8 +885,15 @@ class Program
         Console.WriteLine();
         Console.WriteLine("  # Analysis workflow");
         Console.WriteLine("  rubiks analyze testcube");
+        Console.WriteLine("  rubiks analyze testcube --shortest");
+        Console.WriteLine("  rubiks analyze testcube --edge=blue");
         Console.WriteLine("  rubiks export testcube | rubiks analyze --json");
         Console.WriteLine("  rubiks create | rubiks apply \"R U R'\" | rubiks analyze");
+        Console.WriteLine();
+        Console.WriteLine("  # Solving workflow");
+        Console.WriteLine("  rubiks solve cross testcube --verbose");
+        Console.WriteLine("  rubiks solve cross testcube --level=superhuman");
+        Console.WriteLine("  rubiks create | rubiks apply \"$(rubiks scramble-gen)\" | rubiks solve cross");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  --format, -f    Display format: ascii or unicode (default: unicode)");
@@ -569,6 +901,9 @@ class Program
         Console.WriteLine("  --seed, -s      Random seed for reproducible scrambles");
         Console.WriteLine("  --json, -j      JSON output format for analysis");
         Console.WriteLine("  --verbose, -v   Verbose analysis output");
+        Console.WriteLine("  --shortest      Suggest shortest available move (analyze only)");
+        Console.WriteLine("  --edge, -e      Analyze specific edge color: green, orange, blue, red");
+        Console.WriteLine("  --level, -l     Solving level: pattern (default) or superhuman");
         Console.WriteLine("  --help, -h      Show help information");
         Console.WriteLine();
         Console.WriteLine("Storage:");

@@ -46,11 +46,8 @@ public class CrossAnalyzer : IStageAnalyzer
             }
         }
         
-        // Only return result if we have some cross progress or if it's complete
-        if (correctEdges == 0)
-        {
-            return null; // No cross progress
-        }
+        // Always return result for cross analysis - cross stage is always relevant
+        // The cross stage exists whenever we have cross edges to work on
         
         var details = new Dictionary<string, object>
         {
