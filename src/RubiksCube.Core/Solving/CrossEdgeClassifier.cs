@@ -1,4 +1,5 @@
 using RubiksCube.Core.Models;
+using RubiksCube.Core.Utilities;
 
 namespace RubiksCube.Core.Solving;
 
@@ -16,6 +17,8 @@ public static class CrossEdgeClassifier
     /// <returns>The classified case for this edge</returns>
     public static CrossEdgeCase ClassifyEdgePosition(Cube cube, CubeColor crossColor, CubeColor edgeColor)
     {
+        CubeValidator.ValidateWhiteOnBottom(cube, nameof(CrossEdgeClassifier));
+        
         // Find the edge piece
         var edge = FindCrossEdge(cube, crossColor, edgeColor);
         if (edge == null)

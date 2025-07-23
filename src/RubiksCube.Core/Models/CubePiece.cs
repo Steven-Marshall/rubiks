@@ -139,6 +139,7 @@ public class CubePiece : IEquatable<CubePiece>
     
     /// <summary>
     /// Checks if this piece is in its solved position and orientation
+    /// REQUIRES: Canonical cube orientation (white bottom, green front)
     /// </summary>
     public bool IsSolved => Position == SolvedPosition && IsCorrectOrientation;
     
@@ -158,6 +159,7 @@ public class CubePiece : IEquatable<CubePiece>
     
     /// <summary>
     /// Gets the expected colors for a piece at the given position as 3-element array
+    /// ASSUMES: Standard Western/BOY color scheme with white bottom, green front
     /// </summary>
     private CubeColor?[] GetExpectedColorsForPosition(Position3D pos)
     {

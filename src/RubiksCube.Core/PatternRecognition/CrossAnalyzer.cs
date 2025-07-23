@@ -1,5 +1,6 @@
 using RubiksCube.Core.Models;
 using RubiksCube.Core.PatternRecognition.Models;
+using RubiksCube.Core.Utilities;
 
 namespace RubiksCube.Core.PatternRecognition;
 
@@ -22,6 +23,8 @@ public class CrossAnalyzer : IStageAnalyzer
     
     public RecognitionResult? Analyze(Cube cube)
     {
+        CubeValidator.ValidateCanonicalOrientation(cube, nameof(CrossAnalyzer));
+        
         var crossEdges = GetCrossEdges(cube);
         var correctEdges = 0;
         var misplacedEdges = new List<Dictionary<string, object>>();

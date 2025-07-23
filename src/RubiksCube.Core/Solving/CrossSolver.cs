@@ -50,6 +50,8 @@ public class CrossSolver : ISolver
     /// </summary>
     public SuggestionResult? SuggestAlgorithm(Cube cube, RecognitionResult recognition, EdgeSelectionMode selectionMode, CubeColor? specificEdge = null)
     {
+        CubeValidator.ValidateWhiteOnBottom(cube, nameof(CrossSolver));
+        
         if (recognition.Stage != "cross")
         {
             return null; // Not our stage

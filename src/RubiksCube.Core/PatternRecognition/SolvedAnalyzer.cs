@@ -1,5 +1,6 @@
 using RubiksCube.Core.Models;
 using RubiksCube.Core.PatternRecognition.Models;
+using RubiksCube.Core.Utilities;
 
 namespace RubiksCube.Core.PatternRecognition;
 
@@ -12,6 +13,8 @@ public class SolvedAnalyzer : IStageAnalyzer
     
     public RecognitionResult? Analyze(Cube cube)
     {
+        CubeValidator.ValidateCanonicalOrientation(cube, nameof(SolvedAnalyzer));
+        
         if (!cube.IsSolved)
         {
             return null; // Not in solved stage

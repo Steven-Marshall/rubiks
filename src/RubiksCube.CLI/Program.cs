@@ -7,6 +7,7 @@ using RubiksCube.Core.PatternRecognition;
 using RubiksCube.Core.PatternRecognition.Models;
 using RubiksCube.Core.Solving;
 using RubiksCube.Core.Extensions;
+using RubiksCube.Core.Utilities;
 using RubiksCube.CLI.Configuration;
 using System.Text.Json;
 
@@ -511,6 +512,11 @@ class Program
                 cube = Cube.FromJson(cubeJson.Trim());
             }
 
+            // Normalize cube to canonical orientation (white bottom, green front) for analysis
+            // Analysis methods require canonical format due to edge.IsSolved dependency chain
+            var normalizationResult = CubeNormalizer.NormalizeToCanonical(cube);
+            cube = normalizationResult.NormalizedCube;
+
             // Check if we should show all cross edges analysis
             if (allEdges)
             {
@@ -576,6 +582,40 @@ class Program
                 {
                     result = analyzer.Analyze(cube);
                 }
+            }
+
+            // Prepend normalization moves to any suggestion algorithms
+            // User needs to know the complete sequence including getting white to bottom
+            if (result.Suggestion != null && !string.IsNullOrEmpty(result.Suggestion.Algorithm))
+            {
+                var originalAlgorithm = result.Suggestion.Algorithm;
+                var completeAlgorithm = string.IsNullOrEmpty(normalizationResult.NormalizationMoves) 
+                    ? originalAlgorithm 
+                    : $"{normalizationResult.NormalizationMoves} {originalAlgorithm}";
+                
+                // Update the suggestion with the complete algorithm
+                result = new AnalysisResult(
+                    result.Recognition,
+                    new SuggestionResult(
+                        completeAlgorithm,
+                        result.Suggestion.Description,
+                        result.Suggestion.NextStage,
+                        result.Suggestion.Details
+                    )
+                );
+            }
+            else if (result.Suggestion == null && !string.IsNullOrEmpty(normalizationResult.NormalizationMoves))
+            {
+                // If there's no existing suggestion but we have normalization moves, add them as a suggestion
+                result = new AnalysisResult(
+                    result.Recognition,
+                    new SuggestionResult(
+                        normalizationResult.NormalizationMoves,
+                        "Normalize cube orientation",
+                        result.Recognition.Stage,
+                        null
+                    )
+                );
             }
 
             // Output result
@@ -723,6 +763,11 @@ class Program
                 cube = Cube.FromJson(cubeJson.Trim());
             }
 
+            // Normalize cube to white-bottom orientation for solving
+            // Solving methods require white-bottom format for cross classification
+            var normalizationResult = CubeNormalizer.NormalizeToWhiteBottom(cube);
+            cube = normalizationResult.NormalizedCube;
+
             // Choose solver based on level
             string algorithm;
             string verboseOutput;
@@ -746,14 +791,21 @@ class Program
                 var suggestion = superhumanSolver.SuggestAlgorithm(cube, recognition);
                 if (suggestion != null)
                 {
-                    algorithm = suggestion.Algorithm;
+                    // Prepend normalization moves to solution algorithm
+                    var solutionAlgorithm = suggestion.Algorithm;
+                    algorithm = string.IsNullOrEmpty(normalizationResult.NormalizationMoves) 
+                        ? solutionAlgorithm 
+                        : string.IsNullOrEmpty(solutionAlgorithm)
+                            ? normalizationResult.NormalizationMoves
+                            : $"{normalizationResult.NormalizationMoves} {solutionAlgorithm}";
+                    
                     verboseOutput = suggestion.Description;
                     
                     // Apply algorithm to get final cube state
                     finalCube = cube.Clone();
-                    if (!string.IsNullOrEmpty(algorithm))
+                    if (!string.IsNullOrEmpty(solutionAlgorithm))
                     {
-                        var algorithmResult = Algorithm.Parse(algorithm);
+                        var algorithmResult = Algorithm.Parse(solutionAlgorithm);
                         if (algorithmResult.IsSuccess)
                         {
                             foreach (var move in algorithmResult.Value.Moves)
@@ -765,7 +817,8 @@ class Program
                 }
                 else
                 {
-                    algorithm = "";
+                    // If no solution found, still return normalization moves if any
+                    algorithm = normalizationResult.NormalizationMoves ?? "";
                     verboseOutput = "No superhuman solution found";
                     finalCube = cube;
                 }
@@ -775,7 +828,15 @@ class Program
                 // Use standard pattern-based solver
                 var crossSolver = CrossConfiguration.CreateCrossSolver(args);
                 var solution = crossSolver.SolveCompleteCross(cube, verbose);
-                algorithm = solution.Algorithm;
+                
+                // Prepend normalization moves to solution algorithm
+                var solutionAlgorithm = solution.Algorithm;
+                algorithm = string.IsNullOrEmpty(normalizationResult.NormalizationMoves) 
+                    ? solutionAlgorithm 
+                    : string.IsNullOrEmpty(solutionAlgorithm)
+                        ? normalizationResult.NormalizationMoves
+                        : $"{normalizationResult.NormalizationMoves} {solutionAlgorithm}";
+                
                 verboseOutput = solution.VerboseOutput;
                 finalCube = solution.FinalCube;
             }
