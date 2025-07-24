@@ -92,7 +92,10 @@ public static class CubeNormalizer
         var combinedForward = CombineAlgorithms(step1Result.NormalizationMoves, frontAlignmentMoves);
         var combinedReverse = CombineAlgorithms(GetReverseAlgorithm(frontAlignmentMoves), step1Result.ReverseTransformation);
         
-        return new NormalizationResult(canonicalCube, combinedForward, combinedReverse, CubeColor.White);
+        // Compress common rotation sequences for better user experience
+        var optimizedForward = CompressRotationSequence(combinedForward);
+        
+        return new NormalizationResult(canonicalCube, optimizedForward, combinedReverse, CubeColor.White);
     }
     
     
@@ -408,6 +411,30 @@ public static class CubeNormalizer
         if (string.IsNullOrEmpty(first)) return second;
         if (string.IsNullOrEmpty(second)) return first;
         return $"{first} {second}";
+    }
+    
+    /// <summary>
+    /// Compresses common rotation sequences for better user experience.
+    /// Currently handles: x2 y2 → z2 (mathematically equivalent transformations)
+    /// </summary>
+    /// <param name="moves">The move sequence to compress</param>
+    /// <returns>Compressed move sequence</returns>
+    private static string CompressRotationSequence(string moves)
+    {
+        if (string.IsNullOrEmpty(moves)) return moves;
+        
+        // Normalize whitespace
+        var normalized = moves.Trim().Replace("  ", " ");
+        
+        // Check for x2 y2 → z2 compression
+        // x2: Front↔Back, Up↔Down; y2: Front↔Back, Left↔Right
+        // Combined: Up↔Down + Left↔Right = z2 (Front/Back unchanged)
+        if (normalized == "x2 y2")
+        {
+            return "z2";
+        }
+        
+        return normalized;
     }
     
     /// <summary>

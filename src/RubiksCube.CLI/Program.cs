@@ -415,7 +415,8 @@ class Program
             bool verbose = false;
             bool json = false;
             bool allEdges = false;
-            bool shortest = false;
+            bool shortest = true; // Default to shortest-first (aligns with solve cross behavior)
+            bool fixedOrder = false; // Backward compatibility flag
             CubeColor? specificEdge = null;
             
             // Parse arguments
@@ -436,6 +437,12 @@ class Program
                 else if (args[i] == "--shortest")
                 {
                     shortest = true;
+                    fixedOrder = false;
+                }
+                else if (args[i] == "--fixed-order")
+                {
+                    fixedOrder = true;
+                    shortest = false;
                 }
                 else if (args[i] == "--edge" || args[i] == "-e")
                 {
@@ -543,13 +550,18 @@ class Program
                 var recognition = crossAnalyzer.Analyze(cube);
                 if (recognition != null && recognition.Stage == "cross")
                 {
-                    var selectionMode = shortest ? CrossSolver.EdgeSelectionMode.Shortest : CrossSolver.EdgeSelectionMode.FixedOrder;
+                    // Edge selection logic: specific edge overrides other modes, then check shortest vs fixed
+                    var selectionMode = specificEdge.HasValue 
+                        ? CrossSolver.EdgeSelectionMode.FixedOrder  // Use fixed order with specific edge
+                        : fixedOrder 
+                            ? CrossSolver.EdgeSelectionMode.FixedOrder 
+                            : CrossSolver.EdgeSelectionMode.Shortest; // Default to shortest
                     var suggestion = crossSolver.SuggestAlgorithm(cube, recognition, selectionMode, specificEdge);
                     result = new AnalysisResult(recognition, suggestion);
                     
                     if (verbose)
                     {
-                        verboseDetails = GenerateCustomVerboseDetails(cube, recognition, suggestion, shortest, specificEdge);
+                        verboseDetails = GenerateCustomVerboseDetails(cube, recognition, suggestion, !fixedOrder && !specificEdge.HasValue, specificEdge);
                     }
                 }
                 else
@@ -584,16 +596,16 @@ class Program
                 }
             }
 
-            // Prepend normalization moves to any suggestion algorithms
-            // User needs to know the complete sequence including getting white to bottom
-            if (result.Suggestion != null && !string.IsNullOrEmpty(result.Suggestion.Algorithm))
+            // Combine normalization moves with suggestion algorithms using centralized logic
+            // Only return combined algorithm if there's a real solving algorithm
+            if (result.Suggestion != null)
             {
-                var originalAlgorithm = result.Suggestion.Algorithm;
-                var completeAlgorithm = string.IsNullOrEmpty(normalizationResult.NormalizationMoves) 
-                    ? originalAlgorithm 
-                    : $"{normalizationResult.NormalizationMoves} {originalAlgorithm}";
+                var originalAlgorithm = result.Suggestion.Algorithm ?? "";
+                var completeAlgorithm = AlgorithmCombiner.CombineNormalizationWithAlgorithm(
+                    normalizationResult.NormalizationMoves, 
+                    originalAlgorithm);
                 
-                // Update the suggestion with the complete algorithm
+                // Update the suggestion with the complete algorithm (may be empty if no real algorithm)
                 result = new AnalysisResult(
                     result.Recognition,
                     new SuggestionResult(
@@ -604,19 +616,8 @@ class Program
                     )
                 );
             }
-            else if (result.Suggestion == null && !string.IsNullOrEmpty(normalizationResult.NormalizationMoves))
-            {
-                // If there's no existing suggestion but we have normalization moves, add them as a suggestion
-                result = new AnalysisResult(
-                    result.Recognition,
-                    new SuggestionResult(
-                        normalizationResult.NormalizationMoves,
-                        "Normalize cube orientation",
-                        result.Recognition.Stage,
-                        null
-                    )
-                );
-            }
+            // Note: Removed the else clause that would add normalization-only suggestions
+            // If there's no real algorithm needed, we shouldn't suggest normalization moves
 
             // Output result
             if (json)
@@ -683,7 +684,7 @@ class Program
         if (args.Length < 2)
         {
             await Console.Error.WriteLineAsync("Error: Solve stage required");
-            await Console.Error.WriteLineAsync("Usage: rubiks solve cross [cube-name] [--verbose] [--level=pattern|superhuman]");
+            await Console.Error.WriteLineAsync("Usage: rubiks solve cross [cube-name] [--verbose] [--level=pattern|superhuman] [--shortest] [--fixed-order] [--edge=color]");
             return 1;
         }
 
@@ -699,6 +700,9 @@ class Program
             string? cubeName = null;
             bool verbose = false;
             string level = "pattern"; // Default to pattern-based solving
+            bool shortest = true; // Default to shortest-first (new behavior)
+            bool fixedOrder = false; // Backward compatibility flag
+            CubeColor? specificEdge = null; // Specific edge targeting
             
             // Parse arguments
             for (int i = 2; i < args.Length; i++)
@@ -723,6 +727,59 @@ class Program
                 else if (args[i].StartsWith("--level="))
                 {
                     level = args[i].Substring("--level=".Length).ToLowerInvariant();
+                }
+                else if (args[i] == "--shortest")
+                {
+                    shortest = true;
+                    fixedOrder = false;
+                }
+                else if (args[i] == "--fixed-order")
+                {
+                    fixedOrder = true;
+                    shortest = false;
+                }
+                else if (args[i] == "--edge" || args[i] == "-e")
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        var edgeColorStr = args[i + 1].ToLowerInvariant();
+                        specificEdge = edgeColorStr switch
+                        {
+                            "green" or "g" => CubeColor.Green,
+                            "orange" or "o" => CubeColor.Orange,
+                            "blue" or "b" => CubeColor.Blue,
+                            "red" or "r" => CubeColor.Red,
+                            _ => null
+                        };
+                        if (specificEdge == null)
+                        {
+                            await Console.Error.WriteLineAsync($"Error: Invalid edge color '{args[i + 1]}'. Use green, orange, blue, or red.");
+                            return 1;
+                        }
+                        i++; // Skip the edge color value
+                    }
+                    else
+                    {
+                        await Console.Error.WriteLineAsync("Error: --edge requires a color value (green, orange, blue, red)");
+                        return 1;
+                    }
+                }
+                else if (args[i].StartsWith("--edge="))
+                {
+                    var edgeColorStr = args[i].Substring("--edge=".Length).ToLowerInvariant();
+                    specificEdge = edgeColorStr switch
+                    {
+                        "green" or "g" => CubeColor.Green,
+                        "orange" or "o" => CubeColor.Orange,
+                        "blue" or "b" => CubeColor.Blue,
+                        "red" or "r" => CubeColor.Red,
+                        _ => null
+                    };
+                    if (specificEdge == null)
+                    {
+                        await Console.Error.WriteLineAsync($"Error: Invalid edge color '{edgeColorStr}'. Use green, orange, blue, or red.");
+                        return 1;
+                    }
                 }
                 else if (!args[i].StartsWith("-"))
                 {
@@ -763,9 +820,9 @@ class Program
                 cube = Cube.FromJson(cubeJson.Trim());
             }
 
-            // Normalize cube to white-bottom orientation for solving
-            // Solving methods require white-bottom format for cross classification
-            var normalizationResult = CubeNormalizer.NormalizeToWhiteBottom(cube);
+            // Normalize cube to canonical orientation for solving
+            // Both CrossAnalyzer and CrossSolver require canonical format (white bottom + green front)
+            var normalizationResult = CubeNormalizer.NormalizeToCanonical(cube);
             cube = normalizationResult.NormalizedCube;
 
             // Choose solver based on level
@@ -777,35 +834,22 @@ class Program
             {
                 var superhumanSolver = CrossConfiguration.CreateSuperhumanCrossSolver(args);
                 superhumanSolver.Verbose = verbose;
+                var normalizedSuperhumanSolver = new NormalizedSuperhumanCrossSolver(superhumanSolver);
+                var crossColor = CrossConfiguration.GetCrossColor(args);
                 
-                // Create a fake recognition for the superhuman solver
-                var crossProgress = cube.CountSolvedCrossEdges(CrossConfiguration.GetCrossColor(args));
-                var recognition = new RecognitionResult(
-                    stage: "cross",
-                    isComplete: crossProgress == 4,
-                    progress: crossProgress,
-                    total: 4,
-                    description: $"Cross progress: {crossProgress}/4 edges"
-                );
-                
-                var suggestion = superhumanSolver.SuggestAlgorithm(cube, recognition);
+                // Use wrapper method that handles progress calculation internally
+                // Pass the pre-normalized cube and the normalization moves from HandleSolve
+                var suggestion = normalizedSuperhumanSolver.SuggestAlgorithmWithProgress(cube, normalizationResult.NormalizationMoves, crossColor, verbose);
                 if (suggestion != null)
                 {
-                    // Prepend normalization moves to solution algorithm
-                    var solutionAlgorithm = suggestion.Algorithm;
-                    algorithm = string.IsNullOrEmpty(normalizationResult.NormalizationMoves) 
-                        ? solutionAlgorithm 
-                        : string.IsNullOrEmpty(solutionAlgorithm)
-                            ? normalizationResult.NormalizationMoves
-                            : $"{normalizationResult.NormalizationMoves} {solutionAlgorithm}";
-                    
+                    algorithm = suggestion.Algorithm;
                     verboseOutput = suggestion.Description;
                     
                     // Apply algorithm to get final cube state
                     finalCube = cube.Clone();
-                    if (!string.IsNullOrEmpty(solutionAlgorithm))
+                    if (!string.IsNullOrEmpty(algorithm))
                     {
-                        var algorithmResult = Algorithm.Parse(solutionAlgorithm);
+                        var algorithmResult = Algorithm.Parse(algorithm);
                         if (algorithmResult.IsSuccess)
                         {
                             foreach (var move in algorithmResult.Value.Moves)
@@ -817,28 +861,81 @@ class Program
                 }
                 else
                 {
-                    // If no solution found, still return normalization moves if any
-                    algorithm = normalizationResult.NormalizationMoves ?? "";
+                    algorithm = "";
                     verboseOutput = "No superhuman solution found";
                     finalCube = cube;
                 }
             }
             else
             {
-                // Use standard pattern-based solver
+                // Use standard pattern-based solver with new edge selection logic
                 var crossSolver = CrossConfiguration.CreateCrossSolver(args);
-                var solution = crossSolver.SolveCompleteCross(cube, verbose);
+                var crossAnalyzer = CrossConfiguration.CreateCrossAnalyzer(args);
                 
-                // Prepend normalization moves to solution algorithm
-                var solutionAlgorithm = solution.Algorithm;
-                algorithm = string.IsNullOrEmpty(normalizationResult.NormalizationMoves) 
-                    ? solutionAlgorithm 
-                    : string.IsNullOrEmpty(solutionAlgorithm)
-                        ? normalizationResult.NormalizationMoves
-                        : $"{normalizationResult.NormalizationMoves} {solutionAlgorithm}";
-                
-                verboseOutput = solution.VerboseOutput;
-                finalCube = solution.FinalCube;
+                if (fixedOrder)
+                {
+                    // Use legacy fixed-order solving for backward compatibility
+                    var solution = crossSolver.SolveCompleteCross(cube, verbose);
+                    
+                    // Combine normalization with solution algorithm using centralized logic
+                    var solutionAlgorithm = solution.Algorithm;
+                    algorithm = AlgorithmCombiner.CombineNormalizationWithAlgorithm(
+                        normalizationResult.NormalizationMoves, 
+                        solutionAlgorithm);
+                    
+                    verboseOutput = solution.VerboseOutput;
+                    finalCube = solution.FinalCube;
+                }
+                else
+                {
+                    // Use new shortest-first or specific edge selection (matches analyze logic)
+                    var recognition = crossAnalyzer.Analyze(cube);
+                    if (recognition != null && recognition.Stage == "cross")
+                    {
+                        // Edge selection logic: specific edge overrides shortest mode
+                        var selectionMode = specificEdge.HasValue 
+                            ? CrossSolver.EdgeSelectionMode.FixedOrder  // Use fixed order with specific edge
+                            : shortest 
+                                ? CrossSolver.EdgeSelectionMode.Shortest 
+                                : CrossSolver.EdgeSelectionMode.FixedOrder;
+                        var suggestion = crossSolver.SuggestAlgorithm(cube, recognition, selectionMode, specificEdge);
+                        
+                        // Combine normalization with suggestion algorithm using centralized logic
+                        var suggestionAlgorithm = suggestion?.Algorithm ?? "";
+                        algorithm = AlgorithmCombiner.CombineNormalizationWithAlgorithm(
+                            normalizationResult.NormalizationMoves, 
+                            suggestionAlgorithm);
+                        
+                        if (verbose)
+                        {
+                            verboseOutput = GenerateCustomVerboseDetails(cube, recognition, suggestion, shortest, specificEdge);
+                        }
+                        else
+                        {
+                            verboseOutput = suggestion?.Description ?? "No solution found";
+                        }
+                        
+                        // Apply algorithm to get final cube state
+                        finalCube = cube.Clone();
+                        if (!string.IsNullOrEmpty(suggestionAlgorithm))
+                        {
+                            var algorithmResult = Algorithm.Parse(suggestionAlgorithm);
+                            if (algorithmResult.IsSuccess)
+                            {
+                                foreach (var move in algorithmResult.Value.Moves)
+                                {
+                                    finalCube.ApplyMove(move);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        algorithm = normalizationResult.NormalizationMoves;
+                        verboseOutput = "Cube is already solved or not in cross stage";
+                        finalCube = cube;
+                    }
+                }
             }
             
             if (verbose)
@@ -923,8 +1020,8 @@ class Program
         Console.WriteLine("  rubiks delete cube-name                       Delete a saved cube");
         Console.WriteLine("  rubiks export cube-name                       Export cube JSON to stdout");
         Console.WriteLine("  rubiks scramble-gen [--moves=n] [--seed=n]    Generate a WCA scramble algorithm");
-        Console.WriteLine("  rubiks solve cross [cube-name] [--verbose] [--level=pattern|superhuman] Solve white cross");
-        Console.WriteLine("  rubiks analyze [cube-name] [--json] [--verbose] [--shortest] [--edge=color] Analyze cube state and suggest moves");
+        Console.WriteLine("  rubiks solve cross [cube-name] [--verbose] [--level=pattern|superhuman] [--shortest] [--fixed-order] [--edge=color] Solve white cross");
+        Console.WriteLine("  rubiks analyze [cube-name] [--json] [--verbose] [--shortest] [--fixed-order] [--edge=color] [--all-edges] Analyze cube state and suggest moves");
         Console.WriteLine("  rubiks help                                   Show this help message");
         Console.WriteLine();
         Console.WriteLine("Examples:");
@@ -962,7 +1059,8 @@ class Program
         Console.WriteLine("  --seed, -s      Random seed for reproducible scrambles");
         Console.WriteLine("  --json, -j      JSON output format for analysis");
         Console.WriteLine("  --verbose, -v   Verbose analysis output");
-        Console.WriteLine("  --shortest      Suggest shortest available move (analyze only)");
+        Console.WriteLine("  --shortest      Use shortest available algorithm (default for both analyze and solve cross)");
+        Console.WriteLine("  --fixed-order   Use fixed edge order (green→blue→orange→red) for backward compatibility");
         Console.WriteLine("  --edge, -e      Analyze specific edge color: green, orange, blue, red");
         Console.WriteLine("  --level, -l     Solving level: pattern (default) or superhuman");
         Console.WriteLine("  --help, -h      Show help information");
